@@ -1,0 +1,76 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // 0. Default Deny
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // --- Helpers ---
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isEmailVerified() {
+      return isSignedIn() && request.auth.token.email_verified == true;
+    }
+
+    function isUser(uid) {
+      return isSignedIn() && request.auth.uid == uid;
+    }
+
+    function isAdmin() {
+      // Bootstrapped admin email check + check for admin collection document
+      return isSignedIn() && (
+        request.auth.token.email == 'kato-miya@yubisui.co.jp' && request.auth.token.email_verified == true
+        // || exists(/databases/$(database)/documents/admins/$(request.auth.uid))
+      );
+    }
+
+    function isValidId(id) {
+      return id is string && id.size() > 0 && id.size() <= 128;
+    }
+
+    // --- Validation Blueprints ---
+    function isValidLink(data) {
+      return data.keys().hasAll(['title', 'url', 'category', 'sourceType', 'createdAt', 'updatedAt', 'createdBy'])
+        && data.keys().size() >= 7 && data.keys().size() <= 8
+        && data.title is string && data.title.size() > 0 && data.title.size() <= 200
+        && data.url is string && data.url.size() > 0 && data.url.size() <= 1000
+        && data.category in ['test', 'design', 'knowledge']
+        && data.sourceType in ['box', 'drive', 'local', 'other']
+        && data.createdBy == request.auth.uid
+        && (!('description' in data) || (data.description is string && data.description.size() <= 1000));
+    }
+
+    // --- Collections ---
+    match /links/{linkId} {
+      allow list: if isSignedIn();
+      allow get: if isSignedIn() && isValidId(linkId);
+
+      allow create: if isEmailVerified() 
+        && isValidId(linkId)
+        && isValidLink(request.resource.data)
+        && request.resource.data.createdAt == request.time
+        && request.resource.data.updatedAt == request.time;
+
+      allow update: if isEmailVerified()
+        && isValidId(linkId)
+        && isValidLink(request.resource.data)
+        && (
+          isAdmin() || (request.resource.data.createdBy == resource.data.createdBy && request.auth.uid == resource.data.createdBy)
+        )
+        && request.resource.data.createdAt == resource.data.createdAt
+        && request.resource.data.updatedAt == request.time
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['title', 'url', 'description', 'category', 'sourceType', 'updatedAt']);
+
+      allow delete: if isAdmin() || (isSignedIn() && request.auth.uid == resource.data.createdBy);
+    }
+    
+    // Admin collection (if needed for future scaling)
+    match /admins/{adminId} {
+      allow read: if isSignedIn();
+      allow write: if false; // Only manageable via console/admin SDK
+    }
+  }
+}

@@ -1,0 +1,52 @@
+{
+  "entities": {
+    "Link": {
+      "title": "Document Link",
+      "description": "Represents a link to a document or resource stored in Box, Drive, etc.",
+      "type": "object",
+      "properties": {
+        "title": {
+          "type": "string",
+          "description": "The title of the document"
+        },
+        "url": {
+          "type": "string",
+          "format": "uri",
+          "description": "The URL to the document"
+        },
+        "description": {
+          "type": "string",
+          "description": "Short summary of what is in the document"
+        },
+        "category": {
+          "type": "string",
+          "enum": ["test", "design", "knowledge"],
+          "description": "The category of the document"
+        },
+        "sourceType": {
+          "type": "string",
+          "enum": ["box", "drive", "local", "other"],
+          "description": "The platform where the document is stored"
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "createdBy": {
+          "type": "string"
+        }
+      },
+      "required": ["title", "url", "category", "sourceType"]
+    }
+  },
+  "firestore": {
+    "links/{linkId}": {
+      "schema": "Link",
+      "description": "A collection of shared document links"
+    }
+  }
+}
