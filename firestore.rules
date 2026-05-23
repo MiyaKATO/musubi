@@ -8,7 +8,7 @@ service cloud.firestore {
 
     // --- Helpers ---
     function isSignedIn() {
-      return request.auth != null;
+      return request.auth != null && request.auth.token.email != null && request.auth.token.email.matches('.*@yubisui\\.co\\.jp$');
     }
 
     function isEmailVerified() {

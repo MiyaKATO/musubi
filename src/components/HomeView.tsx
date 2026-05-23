@@ -83,7 +83,7 @@ export default function HomeView({ user, onNavigateToCategory, links }: HomeView
   const [editAnnContent, setEditAnnContent] = useState('');
   const [editAnnType, setEditAnnType] = useState<Announcement['type']>('info');
 
-  const isVerifiedUser = user?.emailVerified === true;
+  const isVerifiedUser = user?.emailVerified === true && user?.email?.endsWith('@yubisui.co.jp') === true;
 
   // Listen to setting document 'home' in firebase
   useEffect(() => {

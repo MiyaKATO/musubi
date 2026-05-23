@@ -7,7 +7,7 @@ import Sidebar from './components/Sidebar';
 import LinkCard from './components/LinkCard';
 import LinkDialog from './components/LinkDialog';
 import HomeView from './components/HomeView';
-import { Plus, Search, LogIn, User as UserIcon, LogOut, Loader2 } from 'lucide-react';
+import { Plus, Search, LogIn, User as UserIcon, LogOut, Loader2, AlertTriangle } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 
 export default function App() {
@@ -19,25 +19,51 @@ export default function App() {
   const [editingLink, setEditingLink] = useState<DocLink | null>(null);
   const [user, setUser] = useState<User | null>(null);
   const [authLoading, setAuthLoading] = useState(true);
+  const [authError, setAuthError] = useState<string | null>(null);
 
   // Auth Listener
   useEffect(() => {
-    return onAuthStateChanged(auth, (u) => {
-      setUser(u);
+    return onAuthStateChanged(auth, async (u) => {
+      if (u) {
+        if (u.email && u.email.endsWith('@yubisui.co.jp')) {
+          setUser(u);
+          setAuthError(null);
+        } else {
+          setUser(null);
+          setAuthError("アクセス制限: yubisui.co.jp ドメインのGoogleアカウントでのみログイン可能です。");
+          try {
+            await auth.signOut();
+          } catch (e) {
+            console.error("Signout after invalid domain failed:", e);
+          }
+        }
+      } else {
+        setUser(null);
+      }
       setAuthLoading(false);
     });
   }, []);
 
   const handleLogin = async () => {
     const provider = new GoogleAuthProvider();
+    provider.setCustomParameters({ prompt: 'select_account' });
+    setAuthError(null);
     try {
-      await signInWithPopup(auth, provider);
+      const result = await signInWithPopup(auth, provider);
+      const email = result.user.email;
+      if (email && !email.endsWith('@yubisui.co.jp')) {
+        setAuthError("アクセス制限: yubisui.co.jp ドメインのGoogleアカウントでのみログイン可能です。");
+        await auth.signOut();
+      }
     } catch (error) {
       console.error("Login failed:", error);
     }
   };
 
-  const handleLogout = () => auth.signOut();
+  const handleLogout = () => {
+    setAuthError(null);
+    auth.signOut();
+  };
 
   // Firestore Listener
   useEffect(() => {
@@ -223,6 +249,21 @@ export default function App() {
             )}
           </div>
         </header>
+
+        {authError && (
+          <div className="mb-6 p-4 bg-rose-50 border border-rose-200 rounded-xl flex items-start gap-3 text-rose-800 text-sm animate-fade-in shadow-sm">
+            <AlertTriangle className="w-5 h-5 text-rose-500 mt-0.5 flex-shrink-0" />
+            <div className="flex-1 font-medium">
+              <span className="font-bold">アクセス制限:</span> {authError}
+            </div>
+            <button 
+              onClick={() => setAuthError(null)} 
+              className="text-rose-400 hover:text-rose-600 transition-colors text-xs font-semibold px-2 py-1 rounded"
+            >
+              閉じる
+            </button>
+          </div>
+        )}
 
         {activeTab === 'home' ? (
           <HomeView 
