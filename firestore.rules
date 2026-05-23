@@ -66,6 +66,11 @@ service cloud.firestore {
 
       allow delete: if isAdmin() || (isSignedIn() && request.auth.uid == resource.data.createdBy);
     }
+
+    match /portal_settings/{settingId} {
+      allow read: if isSignedIn();
+      allow write: if isEmailVerified();
+    }
     
     // Admin collection (if needed for future scaling)
     match /admins/{adminId} {

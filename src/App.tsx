@@ -2,17 +2,18 @@ import { useState, useEffect, useMemo } from 'react';
 import { collection, query, onSnapshot, addDoc, updateDoc, deleteDoc, doc, serverTimestamp, setDoc } from 'firebase/firestore';
 import { signInWithPopup, GoogleAuthProvider, onAuthStateChanged, User } from 'firebase/auth';
 import { db, auth, handleFirestoreError, OperationType } from './lib/firebase';
-import { DocLink, Category, CATEGORIES } from './types';
+import { DocLink, Category, CATEGORIES, TabId } from './types';
 import Sidebar from './components/Sidebar';
 import LinkCard from './components/LinkCard';
 import LinkDialog from './components/LinkDialog';
+import HomeView from './components/HomeView';
 import { Plus, Search, LogIn, User as UserIcon, LogOut, Loader2 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 
 export default function App() {
   const [links, setLinks] = useState<DocLink[]>([]);
   const [loading, setLoading] = useState(true);
-  const [currentCategory, setCurrentCategory] = useState<Category>('design');
+  const [activeTab, setActiveTab] = useState<TabId>('home');
   const [searchQuery, setSearchQuery] = useState('');
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [editingLink, setEditingLink] = useState<DocLink | null>(null);
@@ -66,13 +67,14 @@ export default function App() {
   }, [user, authLoading]);
 
   const filteredLinks = useMemo(() => {
+    if (activeTab === 'home') return [];
     return links
-      .filter(link => link.category === currentCategory)
+      .filter(link => link.category === activeTab)
       .filter(link => 
         link.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
         link.description?.toLowerCase().includes(searchQuery.toLowerCase())
       );
-  }, [links, currentCategory, searchQuery]);
+  }, [links, activeTab, searchQuery]);
 
   const handleSubmit = async (data: any) => {
     const path = `links/${editingLink?.id || ''}`;
@@ -145,71 +147,90 @@ export default function App() {
   return (
     <div className="min-h-screen bg-slate-50 flex">
       <Sidebar 
-        currentCategory={currentCategory} 
-        onCategoryChange={setCurrentCategory} 
+        activeTab={activeTab} 
+        onTabChange={setActiveTab} 
       />
 
       <main className="flex-1 ml-64 p-8">
-        <header className="flex items-center justify-between mb-8">
+        <header className="flex items-center justify-between mb-8 pb-4 border-b border-slate-200/60">
           <div>
-            <h2 className="text-2xl font-bold text-slate-900">
-              {CATEGORIES.find(c => c.id === currentCategory)?.label} 資料
+            <h2 className="text-2xl font-bold text-slate-900 tracking-tight">
+              {activeTab === 'home' 
+                ? 'ホームダッシュボード' 
+                : `${CATEGORIES.find(c => c.id === activeTab)?.label} 資料`}
             </h2>
-            <p className="text-sm text-slate-500">
-              {filteredLinks.length} 個のアイテムが見つかりました
+            <p className="text-sm text-slate-500 mt-0.5">
+              {activeTab === 'home'
+                ? 'ポータルアナウンス、推奨チャネル、各カテゴリへのクイックアクセス'
+                : `${filteredLinks.length} 個のアイテムが見つかりました`}
             </p>
           </div>
 
           <div className="flex items-center gap-4">
-            <div className="relative">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
-              <input
-                type="text"
-                placeholder="名称や説明で検索..."
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                className="pl-10 pr-4 py-2 bg-white border border-slate-200 rounded-lg text-sm w-64 focus:ring-2 focus:ring-indigo-500 outline-none transition-all"
-              />
-            </div>
+            {activeTab !== 'home' && (
+              <div className="relative">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+                <input
+                  type="text"
+                  placeholder="名称や説明で検索..."
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  className="pl-10 pr-4 py-2 bg-white border border-slate-200 rounded-lg text-sm w-64 focus:ring-2 focus:ring-indigo-500 outline-none transition-all"
+                />
+              </div>
+            )}
 
             {authLoading ? (
               <Loader2 className="w-5 h-5 text-slate-400 animate-spin" />
             ) : user ? (
-              <div className="flex items-center gap-3 bg-white p-1 pr-3 border border-slate-200 rounded-full">
-                <img src={user.photoURL || ''} alt="" className="w-8 h-8 rounded-full border border-slate-100" />
+              <div className="flex items-center gap-3 bg-white p-1 pr-3 border border-slate-200 rounded-full shadow-sm">
+                <img 
+                  src={user.photoURL || ''} 
+                  alt="" 
+                  className="w-8 h-8 rounded-full border border-slate-100 object-cover" 
+                  referrerPolicy="no-referrer" 
+                />
                 <span className="text-xs font-semibold text-slate-700">{user.displayName}</span>
-                <button onClick={handleLogout} className="p-1 text-slate-400 hover:text-slate-600">
+                <button onClick={handleLogout} className="p-1 text-slate-400 hover:text-slate-600 transition-colors" title="ログアウト">
                   <LogOut className="w-4 h-4" />
                 </button>
               </div>
             ) : (
               <button
                 onClick={handleLogin}
-                className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-indigo-600 bg-white border border-indigo-200 hover:bg-indigo-50 rounded-lg shadow-sm transition-all"
+                className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-indigo-600 bg-white border border-indigo-200 hover:bg-indigo-50 rounded-lg shadow-sm transition-all cursor-pointer"
               >
                 <LogIn className="w-4 h-4" />
                 ログイン
               </button>
             )}
 
-            <button
-              onClick={() => {
-                if (!user) {
-                  alert("資料を追加するにはログインが必要です。");
-                  return;
-                }
-                setEditingLink(null);
-                setIsDialogOpen(true);
-              }}
-              className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 rounded-lg shadow-sm transition-all"
-            >
-              <Plus className="w-4 h-4" />
-              資料を追加
-            </button>
+            {activeTab !== 'home' && (
+              <button
+                onClick={() => {
+                  if (!user) {
+                    alert("資料を追加するにはログインが必要です。");
+                    return;
+                  }
+                  setEditingLink(null);
+                  setIsDialogOpen(true);
+                }}
+                className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 rounded-lg shadow-sm transition-all"
+              >
+                <Plus className="w-4 h-4" />
+                資料を追加
+              </button>
+            )}
           </div>
         </header>
 
-        {loading ? (
+        {activeTab === 'home' ? (
+          <HomeView 
+            user={user} 
+            onNavigateToCategory={setActiveTab} 
+            links={links} 
+          />
+        ) : loading ? (
           <div className="flex flex-col items-center justify-center py-32 text-slate-400 gap-4">
             <Loader2 className="w-10 h-10 animate-spin" />
             <p className="text-sm font-medium">読み込み中...</p>
@@ -241,7 +262,7 @@ export default function App() {
             </AnimatePresence>
           </div>
         ) : (
-          <div className="flex flex-col items-center justify-center py-32 bg-white rounded-2xl border-2 border-dashed border-slate-200">
+          <div className="flex flex-col items-center justify-center py-32 bg-white rounded-2xl border border-dashed border-slate-200 p-8 shadow-sm">
             <div className="w-16 h-16 bg-slate-50 rounded-full flex items-center justify-center mb-4">
               {user ? <Search className="w-8 h-8 text-slate-300" /> : <LogIn className="w-8 h-8 text-slate-300" />}
             </div>

@@ -1,5 +1,6 @@
 export type Category = 'test' | 'design' | 'knowledge';
 export type SourceType = 'box' | 'drive' | 'local' | 'other';
+export type TabId = 'home' | Category;
 
 export interface DocLink {
   id: string;
@@ -11,6 +12,27 @@ export interface DocLink {
   createdAt: any;
   updatedAt: any;
   createdBy: string;
+}
+
+export interface Announcement {
+  id: string;
+  title: string;
+  content: string;
+  date: string;
+  type: 'info' | 'warning' | 'success' | 'danger';
+}
+
+export interface PortalConfig {
+  chatworkUrl: string;
+  chatworkRoomName: string;
+  welcomeMessage: string;
+  announcements: Announcement[];
+  hpUrl?: string;
+  hpName?: string;
+  chatworkDescription?: string;
+  hpDescription?: string;
+  libraryTitle?: string;
+  librarySubtitle?: string;
 }
 
 export const CATEGORIES: { id: Category; label: string; icon: string }[] = [

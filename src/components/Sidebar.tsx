@@ -1,16 +1,16 @@
-import { CATEGORIES, Category } from '../types';
+import { CATEGORIES, Category, TabId } from '../types';
 import { cn } from '../lib/utils';
 import * as Icons from 'lucide-react';
 
 interface SidebarProps {
-  currentCategory: Category;
-  onCategoryChange: (category: Category) => void;
+  activeTab: TabId;
+  onTabChange: (tab: TabId) => void;
 }
 
-export default function Sidebar({ currentCategory, onCategoryChange }: SidebarProps) {
+export default function Sidebar({ activeTab, onTabChange }: SidebarProps) {
   return (
-    <div className="w-64 bg-slate-50 border-right border-slate-200 h-screen flex flex-col fixed left-0 top-0">
-      <div className="p-6 border-bottom border-slate-200 bg-white">
+    <div className="w-64 bg-slate-50 border-r border-slate-200 h-screen flex flex-col fixed left-0 top-0">
+      <div className="p-6 border-b border-slate-200 bg-white">
         <h1 className="text-xl font-bold text-slate-800 flex items-center gap-2">
           <Icons.Library className="w-6 h-6 text-indigo-600" />
           DocHub Portal
@@ -19,7 +19,20 @@ export default function Sidebar({ currentCategory, onCategoryChange }: SidebarPr
       </div>
       
       <nav className="flex-1 p-4 space-y-2">
-        <div className="text-xs font-semibold text-slate-400 uppercase tracking-wider px-3 mb-2">
+        <button
+          onClick={() => onTabChange('home')}
+          className={cn(
+            "w-full flex items-center gap-3 px-3 py-2.5 rounded-lg transition-all text-sm font-medium",
+            activeTab === 'home'
+              ? "bg-indigo-50 text-indigo-700 shadow-sm"
+              : "text-slate-600 hover:bg-slate-100 hover:text-slate-900"
+          )}
+        >
+          <Icons.Home className="w-4 h-4" />
+          ホーム画面
+        </button>
+
+        <div className="text-xs font-semibold text-slate-400 uppercase tracking-wider px-3 pt-4 mb-2">
           カテゴリー
         </div>
         {CATEGORIES.map((cat) => {
@@ -27,10 +40,10 @@ export default function Sidebar({ currentCategory, onCategoryChange }: SidebarPr
           return (
             <button
               key={cat.id}
-              onClick={() => onCategoryChange(cat.id)}
+              onClick={() => onTabChange(cat.id)}
               className={cn(
                 "w-full flex items-center gap-3 px-3 py-2.5 rounded-lg transition-all text-sm font-medium",
-                currentCategory === cat.id
+                activeTab === cat.id
                   ? "bg-indigo-50 text-indigo-700 shadow-sm"
                   : "text-slate-600 hover:bg-slate-100 hover:text-slate-900"
               )}
@@ -42,7 +55,7 @@ export default function Sidebar({ currentCategory, onCategoryChange }: SidebarPr
         })}
       </nav>
 
-      <div className="p-4 border-top border-slate-200 bg-slate-50">
+      <div className="p-4 border-t border-slate-200 bg-slate-50">
         <div className="text-[10px] text-slate-400 font-mono uppercase text-center">
           For Business Only
         </div>
