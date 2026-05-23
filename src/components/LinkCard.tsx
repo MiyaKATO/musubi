@@ -10,7 +10,12 @@ export default function LinkCard({ link, onEdit }: LinkCardProps) {
   const sourceLabel = SOURCE_TYPES.find(s => s.id === link.sourceType)?.label || link.sourceType;
 
   return (
-    <div className="group bg-white border border-slate-200 rounded-xl p-5 hover:shadow-md hover:border-indigo-200 transition-all">
+    <a
+      href={link.url}
+      target="_blank"
+      rel="noopener noreferrer"
+      className="group block bg-white border border-slate-200 rounded-xl p-5 hover:shadow-md hover:border-indigo-200 transition-all cursor-pointer text-left"
+    >
       <div className="flex items-start justify-between gap-4">
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2 mb-1">
@@ -26,17 +31,18 @@ export default function LinkCard({ link, onEdit }: LinkCardProps) {
           </p>
         </div>
         <div className="flex flex-col gap-2">
-          <a
-            href={link.url}
-            target="_blank"
-            rel="noopener noreferrer"
+          <div
             className="p-2 text-indigo-600 hover:bg-indigo-50 rounded-lg transition-all"
             title="開く"
           >
             <ExternalLink className="w-5 h-5" />
-          </a>
+          </div>
           <button
-            onClick={() => onEdit(link)}
+            onClick={(e) => {
+              e.preventDefault();
+              e.stopPropagation();
+              onEdit(link);
+            }}
             className="p-2 text-slate-400 hover:text-slate-600 hover:bg-slate-50 rounded-lg transition-all"
             title="編集"
           >
@@ -52,9 +58,9 @@ export default function LinkCard({ link, onEdit }: LinkCardProps) {
         </div>
         <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
           <Info className="w-3 h-3" />
-          クリックで詳細
+          クリックでリンクを開く
         </div>
       </div>
-    </div>
+    </a>
   );
 }
