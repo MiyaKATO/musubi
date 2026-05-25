@@ -1,12 +1,30 @@
+import React from 'react';
 import { DocLink, SOURCE_TYPES } from '../types';
-import { ExternalLink, Edit2, FileText, Info } from 'lucide-react';
+import { ExternalLink, Edit2, FileText, Info, GripVertical } from 'lucide-react';
 
 interface LinkCardProps {
   link: DocLink;
   onEdit: (link: DocLink) => void;
+  canEdit?: boolean;
+  draggable?: boolean;
+  onDragStart?: (e: React.DragEvent) => void;
+  onDragEnd?: (e: React.DragEvent) => void;
+  onDragOver?: (e: React.DragEvent) => void;
+  onDragEnter?: (e: React.DragEvent) => void;
+  isDragging?: boolean;
 }
 
-export default function LinkCard({ link, onEdit }: LinkCardProps) {
+export default function LinkCard({ 
+  link, 
+  onEdit,
+  canEdit = false,
+  draggable = false,
+  onDragStart,
+  onDragEnd,
+  onDragOver,
+  onDragEnter,
+  isDragging = false
+}: LinkCardProps) {
   const sourceLabel = SOURCE_TYPES.find(s => s.id === link.sourceType)?.label || link.sourceType;
 
   return (
@@ -14,11 +32,25 @@ export default function LinkCard({ link, onEdit }: LinkCardProps) {
       href={link.url}
       target="_blank"
       rel="noopener noreferrer"
-      className="group block bg-white border border-slate-200 rounded-xl p-5 hover:shadow-md hover:border-indigo-200 transition-all cursor-pointer text-left"
+      draggable={draggable}
+      onDragStart={onDragStart}
+      onDragEnd={onDragEnd}
+      onDragOver={onDragOver}
+      onDragEnter={onDragEnter}
+      className={`group block bg-white border rounded-xl p-5 hover:shadow-md hover:border-indigo-200 transition-all cursor-pointer text-left ${
+        isDragging 
+          ? 'opacity-40 border-dashed border-indigo-500 bg-indigo-50/20 scale-[0.98]' 
+          : 'border-slate-200'
+      } ${draggable ? 'hover:cursor-grab active:hover:cursor-grabbing' : ''}`}
     >
       <div className="flex items-start justify-between gap-4">
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2 mb-1">
+            {draggable && (
+              <div className="text-slate-400 group-hover:text-indigo-500 transition-colors p-0.5 -ml-1">
+                <GripVertical className="w-3.5 h-3.5" />
+              </div>
+            )}
             <span className="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider bg-slate-100 text-slate-500">
               {sourceLabel}
             </span>
@@ -37,17 +69,19 @@ export default function LinkCard({ link, onEdit }: LinkCardProps) {
           >
             <ExternalLink className="w-5 h-5" />
           </div>
-          <button
-            onClick={(e) => {
-              e.preventDefault();
-              e.stopPropagation();
-              onEdit(link);
-            }}
-            className="p-2 text-slate-400 hover:text-slate-600 hover:bg-slate-50 rounded-lg transition-all"
-            title="編集"
-          >
-            <Edit2 className="w-5 h-5" />
-          </button>
+          {canEdit && (
+            <button
+              onClick={(e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                onEdit(link);
+              }}
+              className="p-2 text-slate-400 hover:text-slate-600 hover:bg-slate-50 rounded-lg transition-all"
+              title="編集"
+            >
+              <Edit2 className="w-5 h-5" />
+            </button>
+          )}
         </div>
       </div>
       

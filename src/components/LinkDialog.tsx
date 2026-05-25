@@ -1,16 +1,16 @@
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
-import { DocLink, Category, SourceType, CATEGORIES, SOURCE_TYPES } from '../types';
+import { DocLink, Category, SourceType, CategoryData, SOURCE_TYPES } from '../types';
 import { motion, AnimatePresence } from 'motion/react';
-import { X, Save, Trash2 } from 'lucide-react';
-import { useEffect } from 'react';
+import { X, Save, Trash2, AlertTriangle } from 'lucide-react';
+import { useEffect, useState } from 'react';
 
 const linkSchema = z.object({
   title: z.string().min(1, 'タイトルは必須です'),
   url: z.string().url('有効なURLを入力してください'),
   description: z.string().optional(),
-  category: z.enum(['test', 'design', 'knowledge']),
+  category: z.string().min(1, 'カテゴリーは必須です'),
   sourceType: z.enum(['box', 'drive', 'local', 'other']),
 });
 
@@ -22,9 +22,10 @@ interface LinkDialogProps {
   onSubmit: (data: LinkFormData) => void;
   onDelete?: () => void;
   initialData?: DocLink | null;
+  categories: CategoryData[];
 }
 
-export default function LinkDialog({ isOpen, onClose, onSubmit, onDelete, initialData }: LinkDialogProps) {
+export default function LinkDialog({ isOpen, onClose, onSubmit, onDelete, initialData, categories }: LinkDialogProps) {
   const {
     register,
     handleSubmit,
@@ -33,19 +34,22 @@ export default function LinkDialog({ isOpen, onClose, onSubmit, onDelete, initia
   } = useForm<LinkFormData>({
     resolver: zodResolver(linkSchema),
     defaultValues: initialData || {
-      category: 'design',
+      category: categories[0]?.id || '',
       sourceType: 'other',
     },
   });
 
+  const [isConfirmingDelete, setIsConfirmingDelete] = useState(false);
+
   // Reset form when initialData changes
   useEffect(() => {
+    setIsConfirmingDelete(false);
     if (initialData) {
       reset(initialData);
     } else {
-      reset({ category: 'design', sourceType: 'other', title: '', url: '', description: '' });
+      reset({ category: categories[0]?.id || '', sourceType: 'other', title: '', url: '', description: '' });
     }
-  }, [initialData, reset, isOpen]);
+  }, [initialData, reset, isOpen, categories]);
 
   if (!isOpen) return null;
 
@@ -112,7 +116,7 @@ export default function LinkDialog({ isOpen, onClose, onSubmit, onDelete, initia
                   {...register('category')}
                   className="w-full px-3 py-2 border border-slate-200 rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none transition-all"
                 >
-                  {CATEGORIES.map(c => <option key={c.id} value={c.id}>{c.label}</option>)}
+                  {categories.map(c => <option key={c.id} value={c.id}>{c.label}</option>)}
                 </select>
               </div>
               <div>
@@ -126,33 +130,65 @@ export default function LinkDialog({ isOpen, onClose, onSubmit, onDelete, initia
               </div>
             </div>
 
-            <div className="pt-4 flex items-center gap-3">
-              {initialData && (
-                <button
-                  type="button"
-                  onClick={onDelete}
-                  className="flex items-center justify-center gap-2 px-4 py-2 text-sm font-medium text-red-600 bg-red-50 hover:bg-red-100 rounded-lg transition-all"
-                >
-                  <Trash2 className="w-4 h-4" />
-                  削除
-                </button>
-              )}
-              <div className="flex-1" />
-              <button
-                type="button"
-                onClick={onClose}
-                className="px-4 py-2 text-sm font-medium text-slate-600 hover:bg-slate-50 rounded-lg transition-all"
-              >
-                キャンセル
-              </button>
-              <button
-                type="submit"
-                className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 rounded-lg shadow-sm transition-all"
-              >
-                <Save className="w-4 h-4" />
-                保存
-              </button>
-            </div>
+            {isConfirmingDelete ? (
+              <div className="pt-4 p-4 bg-rose-50 border border-rose-100 rounded-lg flex flex-col gap-3 animate-fade-in">
+                <div className="flex items-start gap-2.5 text-rose-800 text-xs font-semibold">
+                  <AlertTriangle className="w-4 h-4 text-rose-500 mt-0.5 flex-shrink-0" />
+                  <span>本当にこの資料を削除しますか？この操作は戻せません。</span>
+                </div>
+                <div className="flex justify-end gap-2.5">
+                  <button
+                    type="button"
+                    onClick={() => setIsConfirmingDelete(false)}
+                    className="px-3 py-1.5 text-xs font-medium text-slate-600 bg-white border border-slate-200 hover:bg-slate-50 rounded-md transition-all cursor-pointer"
+                  >
+                    キャンセル
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (onDelete) {
+                        onDelete();
+                      }
+                    }}
+                    className="flex items-center gap-1 px-3 py-1.5 text-xs font-medium text-white bg-red-600 hover:bg-red-700 rounded-md shadow-sm transition-all cursor-pointer"
+                  >
+                    <Trash2 className="w-3.5 h-3.5" />
+                    はい、削除する
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <div className="pt-4 flex items-center justify-between gap-3">
+                {initialData && (
+                  <button
+                    type="button"
+                    onClick={() => setIsConfirmingDelete(true)}
+                    className="flex items-center justify-center gap-2 px-4 py-2 text-sm font-medium text-red-600 bg-red-50 hover:bg-red-100 rounded-lg transition-all cursor-pointer"
+                  >
+                    <Trash2 className="w-4 h-4" />
+                    削除
+                  </button>
+                )}
+                <div className="flex-1" />
+                <div className="flex items-center gap-3">
+                  <button
+                    type="button"
+                    onClick={onClose}
+                    className="px-4 py-2 text-sm font-medium text-slate-600 hover:bg-slate-100 rounded-lg transition-all cursor-pointer"
+                  >
+                    閉じる
+                  </button>
+                  <button
+                    type="submit"
+                    className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 rounded-lg shadow-sm transition-all cursor-pointer"
+                  >
+                    <Save className="w-4 h-4" />
+                    保存
+                  </button>
+                </div>
+              </div>
+            )}
           </form>
         </motion.div>
       </div>

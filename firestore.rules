@@ -34,16 +34,23 @@ service cloud.firestore {
     // --- Validation Blueprints ---
     function isValidLink(data) {
       return data.keys().hasAll(['title', 'url', 'category', 'sourceType', 'createdAt', 'updatedAt', 'createdBy'])
-        && data.keys().size() >= 7 && data.keys().size() <= 8
+        && data.keys().size() >= 7 && data.keys().size() <= 10
         && data.title is string && data.title.size() > 0 && data.title.size() <= 200
         && data.url is string && data.url.size() > 0 && data.url.size() <= 1000
-        && data.category in ['test', 'design', 'knowledge']
+        && data.category is string && data.category.size() > 0 && data.category.size() <= 100
         && data.sourceType in ['box', 'drive', 'local', 'other']
-        && data.createdBy == request.auth.uid
-        && (!('description' in data) || (data.description is string && data.description.size() <= 1000));
+        && data.createdBy is string && data.createdBy.size() > 0
+        && (!('description' in data) || (data.description is string && data.description.size() <= 1000))
+        && (!('order' in data) || (data.order is number || data.order is float));
     }
 
     // --- Collections ---
+    match /categories/{categoryId} {
+      allow list: if isSignedIn();
+      allow get: if isSignedIn() && isValidId(categoryId);
+      allow create, update, delete: if isEmailVerified() && isValidId(categoryId);
+    }
+
     match /links/{linkId} {
       allow list: if isSignedIn();
       allow get: if isSignedIn() && isValidId(linkId);
@@ -51,20 +58,19 @@ service cloud.firestore {
       allow create: if isEmailVerified() 
         && isValidId(linkId)
         && isValidLink(request.resource.data)
+        && request.resource.data.createdBy == request.auth.uid
         && request.resource.data.createdAt == request.time
         && request.resource.data.updatedAt == request.time;
 
       allow update: if isEmailVerified()
         && isValidId(linkId)
         && isValidLink(request.resource.data)
-        && (
-          isAdmin() || (request.resource.data.createdBy == resource.data.createdBy && request.auth.uid == resource.data.createdBy)
-        )
+        && request.resource.data.createdBy == resource.data.createdBy
         && request.resource.data.createdAt == resource.data.createdAt
         && request.resource.data.updatedAt == request.time
-        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['title', 'url', 'description', 'category', 'sourceType', 'updatedAt']);
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['title', 'url', 'description', 'category', 'sourceType', 'updatedAt', 'order']);
 
-      allow delete: if isAdmin() || (isSignedIn() && request.auth.uid == resource.data.createdBy);
+      allow delete: if isEmailVerified();
     }
 
     match /portal_settings/{settingId} {

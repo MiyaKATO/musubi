@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { doc, onSnapshot, setDoc, updateDoc } from 'firebase/firestore';
 import { db } from '../lib/firebase';
-import { PortalConfig, Announcement, Category, CATEGORIES, DocLink } from '../types';
+import { PortalConfig, Announcement, Category, DocLink, CategoryData } from '../types';
+import * as Icons from 'lucide-react';
 import { 
   MessageSquare, 
   Bell, 
@@ -9,9 +10,6 @@ import {
   Plus, 
   Trash2, 
   ChevronRight, 
-  Layout, 
-  CheckSquare, 
-  BookOpen, 
   Check, 
   X, 
   ExternalLink,
@@ -27,6 +25,8 @@ interface HomeViewProps {
   user: User | null;
   onNavigateToCategory: (category: Category) => void;
   links: DocLink[];
+  categories: CategoryData[];
+  onManageCategories: () => void;
 }
 
 const DEFAULT_CONFIG: PortalConfig = {
@@ -57,7 +57,7 @@ const DEFAULT_CONFIG: PortalConfig = {
   ]
 };
 
-export default function HomeView({ user, onNavigateToCategory, links }: HomeViewProps) {
+export default function HomeView({ user, onNavigateToCategory, links, categories, onManageCategories }: HomeViewProps) {
   const [config, setConfig] = useState<PortalConfig>(DEFAULT_CONFIG);
   const [loading, setLoading] = useState(true);
   const [isEditingPortal, setIsEditingPortal] = useState(false);
@@ -82,6 +82,8 @@ export default function HomeView({ user, onNavigateToCategory, links }: HomeView
   const [editAnnTitle, setEditAnnTitle] = useState('');
   const [editAnnContent, setEditAnnContent] = useState('');
   const [editAnnType, setEditAnnType] = useState<Announcement['type']>('info');
+
+  const [deletingAnnId, setDeletingAnnId] = useState<string | null>(null);
 
   const isVerifiedUser = user?.emailVerified === true && user?.email?.endsWith('@yubisui.co.jp') === true;
 
@@ -205,7 +207,6 @@ export default function HomeView({ user, onNavigateToCategory, links }: HomeView
       alert("管理者または権限のあるユーザーだけが削除できます。");
       return;
     }
-    if (!confirm("このお知らせを削除しますか？")) return;
 
     const updatedAnnouncements = config.announcements.filter(ann => ann.id !== id);
 
@@ -215,6 +216,7 @@ export default function HomeView({ user, onNavigateToCategory, links }: HomeView
         ...config,
         announcements: updatedAnnouncements
       }, { merge: true });
+      setDeletingAnnId(null);
     } catch (err) {
       console.error("Failed to delete announcement:", err);
       alert("お知らせの削除に失敗しました。");
@@ -263,39 +265,61 @@ export default function HomeView({ user, onNavigateToCategory, links }: HomeView
   };
 
   // Helper of category descriptions & colors
-  const getCategoryTheme = (catId: Category) => {
-    switch (catId) {
-      case 'design':
-        return {
-          title: '設計資料',
-          desc: 'システム設計書、要件定義書、画面仕様書などを収録。',
-          color: 'from-blue-500 to-indigo-600',
-          bgLight: 'bg-indigo-50/50',
-          hoverBorder: 'hover:border-indigo-200',
-          textColor: 'text-indigo-600',
-          icon: Layout
-        };
-      case 'test':
-        return {
-          title: 'テスト関連',
-          desc: 'テスト仕様書、エビデンス、結合テストやSTGログイン情報。',
-          color: 'from-emerald-400 to-teal-600',
-          bgLight: 'bg-emerald-50/50',
-          hoverBorder: 'hover:border-emerald-200',
-          textColor: 'text-emerald-600',
-          icon: CheckSquare
-        };
-      case 'knowledge':
-        return {
-          title: '勉強会・知識',
-          desc: '技術スタック、ナレッジ集、ビジネスドメインに関する解説ドキュメント。',
-          color: 'from-amber-400 to-orange-500',
-          bgLight: 'bg-amber-50/60',
-          hoverBorder: 'hover:border-amber-200',
-          textColor: 'text-amber-600',
-          icon: BookOpen
-        };
+  const getCategoryTheme = (catId: Category, index: number) => {
+    const cat = categories.find(c => c.id === catId);
+    const label = cat ? cat.label : catId;
+    const iconName = cat ? cat.icon : 'Folder';
+    const IconComponent = (Icons as any)[iconName] || Icons.Folder;
+
+    if (catId === 'design') {
+      return {
+        title: label,
+        desc: 'システム設計書、要件定義書、画面仕様書などを収録。',
+        color: 'from-blue-500 to-indigo-600',
+        bgLight: 'bg-indigo-50/50',
+        hoverBorder: 'hover:border-indigo-200',
+        textColor: 'text-indigo-600',
+        icon: IconComponent
+      };
     }
+    if (catId === 'test') {
+      return {
+        title: label,
+        desc: 'テスト仕様書、エビデンス、結合テストやSTGログイン情報。',
+        color: 'from-emerald-400 to-teal-600',
+        bgLight: 'bg-emerald-50/50',
+        hoverBorder: 'hover:border-emerald-200',
+        textColor: 'text-emerald-600',
+        icon: IconComponent
+      };
+    }
+    if (catId === 'knowledge') {
+      return {
+        title: label,
+        desc: '技術スタック、ナレッジ集、ビジネスドメインに関する解説ドキュメント。',
+        color: 'from-amber-400 to-orange-500',
+        bgLight: 'bg-amber-50/60',
+        hoverBorder: 'hover:border-amber-200',
+        textColor: 'text-amber-600',
+        icon: IconComponent
+      };
+    }
+
+    const themes = [
+      { color: 'from-purple-500 to-pink-500', bgLight: 'bg-purple-50/50', hoverBorder: 'hover:border-purple-200', textColor: 'text-purple-600' },
+      { color: 'from-pink-500 to-rose-500', bgLight: 'bg-rose-50/50', hoverBorder: 'hover:border-rose-200', textColor: 'text-rose-600' },
+      { color: 'from-sky-400 to-blue-500', bgLight: 'bg-sky-50/50', hoverBorder: 'hover:border-sky-200', textColor: 'text-sky-600' },
+      { color: 'from-indigo-500 to-cyan-500', bgLight: 'bg-indigo-50/50', hoverBorder: 'hover:border-indigo-200', textColor: 'text-indigo-600' },
+    ];
+    const themeIndex = index % themes.length;
+    const theme = themes[themeIndex];
+
+    return {
+      title: label,
+      desc: `${label}に関連する重要なリンクやシステム情報を収録。`,
+      ...theme,
+      icon: IconComponent
+    };
   };
 
   // Badge styles according to type
@@ -720,6 +744,27 @@ export default function HomeView({ user, onNavigateToCategory, links }: HomeView
                             </button>
                           </div>
                         </div>
+                      ) : deletingAnnId === ann.id ? (
+                        <div className="space-y-3 bg-rose-50/50 p-3 rounded-lg border border-rose-105 animate-fade-in">
+                          <p className="text-xs font-semibold text-rose-900 flex items-center gap-1.5">
+                            <AlertTriangle className="w-3.5 h-3.5 text-rose-500" />
+                            このお知らせを削除しますか？
+                          </p>
+                          <div className="flex justify-end gap-2 text-[10px]">
+                            <button
+                              onClick={() => setDeletingAnnId(null)}
+                              className="px-2.5 py-1 font-medium text-slate-600 bg-white border border-slate-200 rounded hover:bg-slate-50 cursor-pointer"
+                            >
+                              キャンセル
+                            </button>
+                            <button
+                              onClick={() => handleDeleteAnnouncement(ann.id)}
+                              className="px-2.5 py-1 font-medium text-white bg-rose-600 rounded hover:bg-rose-700 cursor-pointer"
+                            >
+                              はい、削除する
+                            </button>
+                          </div>
+                        </div>
                       ) : (
                         <div className="space-y-2">
                           <div className="flex items-center justify-between">
@@ -740,7 +785,7 @@ export default function HomeView({ user, onNavigateToCategory, links }: HomeView
                                   <Edit2 className="w-3 h-3" />
                                 </button>
                                 <button
-                                  onClick={() => handleDeleteAnnouncement(ann.id)}
+                                  onClick={() => setDeletingAnnId(ann.id)}
                                   className="p-1 hover:bg-rose-50 rounded text-slate-400 hover:text-rose-600"
                                   title="削除"
                                 >
@@ -769,19 +814,30 @@ export default function HomeView({ user, onNavigateToCategory, links }: HomeView
 
           {/* Category Navigation (各カテゴリへの同線) */}
           <div className="space-y-4">
-            <div className="flex items-center justify-between flex-wrap gap-2">
-              <h3 className="text-lg font-bold text-slate-900 flex items-center gap-2">
-                <FileText className="w-5 h-5 text-indigo-600" />
-                {config.libraryTitle || 'ドキュメント資料ライブラリ'}
-              </h3>
+            <div className="flex items-center justify-between flex-wrap gap-3">
+              <div className="flex items-center gap-3">
+                <h3 className="text-lg font-bold text-slate-900 flex items-center gap-2">
+                  <FileText className="w-5 h-5 text-indigo-600" />
+                  {config.libraryTitle || 'ドキュメント資料ライブラリ'}
+                </h3>
+                {isVerifiedUser && (
+                  <button
+                    onClick={onManageCategories}
+                    className="flex items-center gap-1 px-2.5 py-1 text-xs border border-indigo-200 text-indigo-600 hover:bg-indigo-50 rounded-lg transition-all shadow-sm font-semibold cursor-pointer"
+                  >
+                    <Plus className="w-3.5 h-3.5" />
+                    管理
+                  </button>
+                )}
+              </div>
               <span className="text-xs text-slate-400 font-medium whitespace-pre-wrap">
                 {config.librarySubtitle || 'カテゴリをクリックして資料一覧へ'}
               </span>
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-              {CATEGORIES.map((cat) => {
-                const theme = getCategoryTheme(cat.id);
+              {categories.map((cat, index) => {
+                const theme = getCategoryTheme(cat.id, index);
                 if (!theme) return null;
                 const CatIcon = theme.icon;
                 const countOfCat = links.filter(link => link.category === cat.id).length;

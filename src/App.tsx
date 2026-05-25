@@ -2,17 +2,20 @@ import { useState, useEffect, useMemo } from 'react';
 import { collection, query, onSnapshot, addDoc, updateDoc, deleteDoc, doc, serverTimestamp, setDoc } from 'firebase/firestore';
 import { signInWithPopup, GoogleAuthProvider, onAuthStateChanged, User } from 'firebase/auth';
 import { db, auth, handleFirestoreError, OperationType } from './lib/firebase';
-import { DocLink, Category, CATEGORIES, TabId } from './types';
+import { DocLink, Category, CategoryData, CATEGORIES, TabId } from './types';
 import Sidebar from './components/Sidebar';
 import LinkCard from './components/LinkCard';
 import LinkDialog from './components/LinkDialog';
 import HomeView from './components/HomeView';
-import { Plus, Search, LogIn, User as UserIcon, LogOut, Loader2, AlertTriangle } from 'lucide-react';
+import CategoryManagerDialog from './components/CategoryManagerDialog';
+import { Plus, Search, LogIn, User as UserIcon, LogOut, Loader2, AlertTriangle, Settings } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 
 export default function App() {
   const [links, setLinks] = useState<DocLink[]>([]);
   const [loading, setLoading] = useState(true);
+  const [categories, setCategories] = useState<CategoryData[]>(CATEGORIES);
+  const [isCategoryManagerOpen, setIsCategoryManagerOpen] = useState(false);
   const [activeTab, setActiveTab] = useState<TabId>('home');
   const [searchQuery, setSearchQuery] = useState('');
   const [isDialogOpen, setIsDialogOpen] = useState(false);
@@ -20,6 +23,14 @@ export default function App() {
   const [user, setUser] = useState<User | null>(null);
   const [authLoading, setAuthLoading] = useState(true);
   const [authError, setAuthError] = useState<string | null>(null);
+
+  // Drag and drop states
+  const [isDragging, setIsDragging] = useState(false);
+  const [draggedIndex, setDraggedIndex] = useState<number | null>(null);
+  const [localLinks, setLocalLinks] = useState<DocLink[]>([]);
+
+  const isVerifiedUser = user?.emailVerified === true && user?.email?.endsWith('@yubisui.co.jp') === true;
+  const canReorder = isVerifiedUser && !searchQuery;
 
   // Auth Listener
   useEffect(() => {
@@ -92,6 +103,74 @@ export default function App() {
     return () => unsubscribe();
   }, [user, authLoading]);
 
+  // Firestore Listener for Categories
+  useEffect(() => {
+    if (authLoading) return;
+
+    if (!user) {
+      setCategories(CATEGORIES);
+      return;
+    }
+
+    const q = query(collection(db, 'categories'));
+    const unsubscribe = onSnapshot(q, (snapshot) => {
+      if (snapshot.empty) {
+        const seedCategories = async () => {
+          try {
+            for (const cat of CATEGORIES) {
+              await setDoc(doc(db, 'categories', cat.id), {
+                id: cat.id,
+                label: cat.label,
+                icon: cat.icon,
+                createdAt: serverTimestamp()
+              });
+            }
+          } catch (e) {
+            console.error("Error seeding default categories:", e);
+          }
+        };
+        seedCategories();
+      } else {
+        const sorted = snapshot.docs.map(doc => ({
+          id: doc.id,
+          ...doc.data()
+        })) as CategoryData[];
+        setCategories(sorted);
+      }
+    }, (error) => {
+      console.warn("Read categories failed or blocked, falling back to static:", error);
+      setCategories(CATEGORIES);
+    });
+
+    return () => unsubscribe();
+  }, [user, authLoading]);
+
+  const handleAddCategory = async (id: string, label: string, icon: string) => {
+    try {
+      await setDoc(doc(db, 'categories', id), {
+        id,
+        label,
+        icon,
+        createdAt: serverTimestamp()
+      });
+    } catch (error) {
+      console.error("Add category failed:", error);
+      throw error;
+    }
+  };
+
+  const handleDeleteCategory = async (id: string) => {
+    try {
+      await deleteDoc(doc(db, 'categories', id));
+      if (activeTab === id) {
+        setActiveTab('home');
+      }
+    } catch (error) {
+      console.error("Delete category failed:", error);
+      throw error;
+    }
+  };
+
   const filteredLinks = useMemo(() => {
     if (activeTab === 'home') return [];
     return links
@@ -99,8 +178,65 @@ export default function App() {
       .filter(link => 
         link.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
         link.description?.toLowerCase().includes(searchQuery.toLowerCase())
-      );
+      )
+      .sort((a, b) => {
+        const orderA = a.order !== undefined ? a.order : Number.MAX_SAFE_INTEGER;
+        const orderB = b.order !== undefined ? b.order : Number.MAX_SAFE_INTEGER;
+        if (orderA !== orderB) {
+          return orderA - orderB;
+        }
+        const timeA = a.createdAt?.seconds || 0;
+        const timeB = b.createdAt?.seconds || 0;
+        return timeA - timeB;
+      });
   }, [links, activeTab, searchQuery]);
+
+  // Synchronize localLinks with filteredLinks when not dragging
+  useEffect(() => {
+    if (!isDragging) {
+      setLocalLinks(filteredLinks);
+    }
+  }, [filteredLinks, isDragging]);
+
+  const handleDragStart = (index: number) => {
+    setIsDragging(true);
+    setDraggedIndex(index);
+  };
+
+  const handleDragEnter = (index: number) => {
+    if (draggedIndex === null || draggedIndex === index) return;
+
+    const updated = [...localLinks];
+    const draggedItem = updated[draggedIndex];
+
+    // Remove from old position and insert at new position
+    updated.splice(draggedIndex, 1);
+    updated.splice(index, 0, draggedItem);
+
+    setDraggedIndex(index);
+    setLocalLinks(updated);
+  };
+
+  const handleDragEnd = async () => {
+    setIsDragging(false);
+    setDraggedIndex(null);
+    await handleReorderLinks(localLinks);
+  };
+
+  const handleReorderLinks = async (newOrderedLinks: DocLink[]) => {
+    try {
+      const promises = newOrderedLinks.map((link, index) => {
+        const linkRef = doc(db, 'links', link.id);
+        return updateDoc(linkRef, {
+          order: index,
+          updatedAt: serverTimestamp()
+        });
+      });
+      await Promise.all(promises);
+    } catch (error) {
+      console.error("Failed to update links order in Firebase:", error);
+    }
+  };
 
   const handleSubmit = async (data: any) => {
     const path = `links/${editingLink?.id || ''}`;
@@ -117,8 +253,11 @@ export default function App() {
       if (editingLink) {
         await updateDoc(doc(db, 'links', editingLink.id), commonData);
       } else {
+        const categoryLinks = links.filter(l => l.category === data.category);
+        const maxOrder = categoryLinks.reduce((max, l) => (l.order !== undefined && l.order > max ? l.order : max), -1);
         const createData = {
           ...commonData,
+          order: maxOrder + 1,
           createdAt: serverTimestamp(),
           createdBy: user?.uid,
         };
@@ -134,7 +273,6 @@ export default function App() {
 
   const handleDelete = async () => {
     if (!editingLink) return;
-    if (!confirm('本当にこの資料を削除しますか？')) return;
 
     const path = `links/${editingLink.id}`;
     try {
@@ -150,6 +288,9 @@ export default function App() {
   // Initial Seed Logic (For Demo/User Request)
   useEffect(() => {
     if (!loading && links.length === 0 && user) {
+      const alreadySeeded = localStorage.getItem('yubisui_portal_seeded');
+      if (alreadySeeded) return;
+
       const seedData = async () => {
         try {
           await addDoc(collection(db, 'links'), {
@@ -162,6 +303,7 @@ export default function App() {
             updatedAt: serverTimestamp(),
             createdBy: user.uid
           });
+          localStorage.setItem('yubisui_portal_seeded', 'true');
         } catch (e) {
           handleFirestoreError(e, OperationType.CREATE, 'links');
         }
@@ -175,6 +317,9 @@ export default function App() {
       <Sidebar 
         activeTab={activeTab} 
         onTabChange={setActiveTab} 
+        categories={categories}
+        user={user}
+        onManageCategories={() => setIsCategoryManagerOpen(true)}
       />
 
       <main className="flex-1 ml-64 p-8">
@@ -183,7 +328,7 @@ export default function App() {
             <h2 className="text-2xl font-bold text-slate-900 tracking-tight">
               {activeTab === 'home' 
                 ? 'ホームダッシュボード' 
-                : `${CATEGORIES.find(c => c.id === activeTab)?.label} 資料`}
+                : `${categories.find(c => c.id === activeTab)?.label || '資料'} 資料`}
             </h2>
             <p className="text-sm text-slate-500 mt-0.5">
               {activeTab === 'home'
@@ -270,37 +415,53 @@ export default function App() {
             user={user} 
             onNavigateToCategory={setActiveTab} 
             links={links} 
+            categories={categories}
+            onManageCategories={() => setIsCategoryManagerOpen(true)}
           />
         ) : loading ? (
           <div className="flex flex-col items-center justify-center py-32 text-slate-400 gap-4">
             <Loader2 className="w-10 h-10 animate-spin" />
             <p className="text-sm font-medium">読み込み中...</p>
           </div>
-        ) : filteredLinks.length > 0 ? (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            <AnimatePresence>
-              {filteredLinks.map((link) => (
-                <motion.div
-                  key={link.id}
-                  initial={{ opacity: 0, y: 20 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  exit={{ opacity: 0, scale: 0.95 }}
-                  layout
-                >
-                  <LinkCard 
-                    link={link} 
-                    onEdit={(l) => {
-                      if (!user) {
-                        alert("編集するにはログインが必要です。");
-                        return;
-                      }
-                      setEditingLink(l);
-                      setIsDialogOpen(true);
-                    }} 
-                  />
-                </motion.div>
-              ))}
-            </AnimatePresence>
+        ) : localLinks.length > 0 ? (
+          <div className="space-y-4">
+            {canReorder && (
+              <p className="text-xs text-slate-400 bg-slate-100/50 border border-slate-200/40 rounded-lg px-3 py-1.5 w-fit animate-fade-in">
+                💡 ドラッグ＆ドロップで資料の並び順を変更できます（変更は自動保存されます）。
+              </p>
+            )}
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+              <AnimatePresence>
+                {localLinks.map((link, index) => (
+                  <motion.div
+                    key={link.id}
+                    initial={{ opacity: 0, y: 20 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    exit={{ opacity: 0, scale: 0.95 }}
+                    layout
+                  >
+                    <LinkCard 
+                      link={link} 
+                      draggable={canReorder}
+                      onDragStart={() => handleDragStart(index)}
+                      onDragEnd={handleDragEnd}
+                      onDragOver={(e) => e.preventDefault()}
+                      onDragEnter={() => handleDragEnter(index)}
+                      isDragging={draggedIndex === index}
+                      canEdit={isVerifiedUser}
+                      onEdit={(l) => {
+                        if (!user) {
+                          alert("編集するにはログインが必要です。");
+                          return;
+                        }
+                        setEditingLink(l);
+                        setIsDialogOpen(true);
+                      }} 
+                    />
+                  </motion.div>
+                ))}
+              </AnimatePresence>
+            </div>
           </div>
         ) : (
           <div className="flex flex-col items-center justify-center py-32 bg-white rounded-2xl border border-dashed border-slate-200 p-8 shadow-sm">
@@ -334,6 +495,16 @@ export default function App() {
         onSubmit={handleSubmit}
         onDelete={handleDelete}
         initialData={editingLink}
+        categories={categories}
+      />
+
+      <CategoryManagerDialog
+        isOpen={isCategoryManagerOpen}
+        onClose={() => setIsCategoryManagerOpen(false)}
+        categories={categories}
+        onAddCategory={handleAddCategory}
+        onDeleteCategory={handleDeleteCategory}
+        links={links}
       />
     </div>
   );

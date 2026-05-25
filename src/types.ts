@@ -1,6 +1,13 @@
-export type Category = 'test' | 'design' | 'knowledge';
+export type Category = string;
 export type SourceType = 'box' | 'drive' | 'local' | 'other';
-export type TabId = 'home' | Category;
+export type TabId = 'home' | string;
+
+export interface CategoryData {
+  id: string;
+  label: string;
+  icon: string;
+  createdAt?: any;
+}
 
 export interface DocLink {
   id: string;
@@ -12,6 +19,7 @@ export interface DocLink {
   createdAt: any;
   updatedAt: any;
   createdBy: string;
+  order?: number;
 }
 
 export interface Announcement {
