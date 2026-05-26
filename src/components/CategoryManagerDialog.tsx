@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { CategoryData, DocLink } from '../types';
 import { motion, AnimatePresence } from 'motion/react';
-import { X, Plus, Trash2, Folder, Layout, CheckSquare, BookOpen, FileText, Briefcase, Users, MessageSquare, Shield, Database } from 'lucide-react';
+import { X, Plus, Trash2, Folder, Layout, CheckSquare, BookOpen, FileText, Briefcase, Users, MessageSquare, Shield, Database, ChevronUp, ChevronDown } from 'lucide-react';
 
 const ICON_PRESETS = [
   { id: 'Folder', label: 'フォルダ', icon: Folder },
@@ -22,6 +22,7 @@ interface CategoryManagerDialogProps {
   categories: CategoryData[];
   onAddCategory: (id: string, label: string, icon: string) => Promise<void>;
   onDeleteCategory: (id: string) => Promise<void>;
+  onReorderCategories: (orderedCategories: CategoryData[]) => Promise<void>;
   links: DocLink[];
 }
 
@@ -31,6 +32,7 @@ export default function CategoryManagerDialog({
   categories,
   onAddCategory,
   onDeleteCategory,
+  onReorderCategories,
   links
 }: CategoryManagerDialogProps) {
   const [newId, setNewId] = useState('');
@@ -38,6 +40,24 @@ export default function CategoryManagerDialog({
   const [selectedIcon, setSelectedIcon] = useState('Folder');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [errorMsg, setErrorMsg] = useState('');
+
+  const handleMoveUp = async (index: number) => {
+    if (index === 0) return;
+    const reordered = [...categories];
+    const temp = reordered[index];
+    reordered[index] = reordered[index - 1];
+    reordered[index - 1] = temp;
+    await onReorderCategories(reordered);
+  };
+
+  const handleMoveDown = async (index: number) => {
+    if (index === categories.length - 1) return;
+    const reordered = [...categories];
+    const temp = reordered[index];
+    reordered[index] = reordered[index + 1];
+    reordered[index + 1] = temp;
+    await onReorderCategories(reordered);
+  };
 
   if (!isOpen) return null;
 
@@ -197,7 +217,7 @@ export default function CategoryManagerDialog({
               </h3>
 
               <div className="divide-y divide-slate-100 bg-white border border-slate-200 rounded-xl overflow-hidden">
-                {categories.map((cat) => {
+                {categories.map((cat, index) => {
                   const preset = ICON_PRESETS.find(p => p.id === cat.icon) || ICON_PRESETS[0];
                   const CatIcon = preset.icon;
                   const count = getLinkCount(cat.id);
@@ -223,8 +243,39 @@ export default function CategoryManagerDialog({
                       </div>
 
                       <div className="flex items-center gap-2">
+                        {/* 順位変更用のボタン */}
+                        <div className="flex items-center border border-slate-200 rounded-lg overflow-hidden bg-white shadow-sm">
+                          <button
+                            type="button"
+                            disabled={index === 0}
+                            onClick={() => handleMoveUp(index)}
+                            className={`p-1.5 transition-colors cursor-pointer ${
+                              index === 0
+                                ? 'text-slate-200 bg-slate-50 cursor-not-allowed'
+                                : 'text-slate-500 hover:text-indigo-600 hover:bg-indigo-50/50'
+                            }`}
+                            title="表示順序を上げる"
+                          >
+                            <ChevronUp className="w-4 h-4" />
+                          </button>
+                          <div className="w-[1px] h-4 bg-slate-200" />
+                          <button
+                            type="button"
+                            disabled={index === categories.length - 1}
+                            onClick={() => handleMoveDown(index)}
+                            className={`p-1.5 transition-colors cursor-pointer ${
+                              index === categories.length - 1
+                                ? 'text-slate-200 bg-slate-50 cursor-not-allowed'
+                                : 'text-slate-500 hover:text-indigo-600 hover:bg-indigo-50/50'
+                            }`}
+                            title="表示順序を下げる"
+                          >
+                            <ChevronDown className="w-4 h-4" />
+                          </button>
+                        </div>
+
                         {!isDeletable && (
-                          <span className="text-[10px] text-amber-600 font-medium px-2 py-1 bg-amber-50 rounded-lg border border-amber-100">
+                          <span className="text-[10px] text-amber-600 font-medium px-2 py-1 bg-amber-50 rounded-lg border border-amber-100 hidden sm:inline-block">
                             資料あり（削除不可）
                           </span>
                         )}

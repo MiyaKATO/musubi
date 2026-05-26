@@ -117,11 +117,13 @@ export default function App() {
       if (snapshot.empty) {
         const seedCategories = async () => {
           try {
+            let index = 0;
             for (const cat of CATEGORIES) {
               await setDoc(doc(db, 'categories', cat.id), {
                 id: cat.id,
                 label: cat.label,
                 icon: cat.icon,
+                order: index++,
                 createdAt: serverTimestamp()
               });
             }
@@ -135,6 +137,16 @@ export default function App() {
           id: doc.id,
           ...doc.data()
         })) as CategoryData[];
+        
+        sorted.sort((a, b) => {
+          const orderA = a.order !== undefined ? a.order : 9999;
+          const orderB = b.order !== undefined ? b.order : 9999;
+          if (orderA !== orderB) return orderA - orderB;
+          const timeA = a.createdAt?.seconds || 0;
+          const timeB = b.createdAt?.seconds || 0;
+          return timeA - timeB || a.id.localeCompare(b.id);
+        });
+        
         setCategories(sorted);
       }
     }, (error) => {
@@ -147,10 +159,12 @@ export default function App() {
 
   const handleAddCategory = async (id: string, label: string, icon: string) => {
     try {
+      const maxOrder = categories.reduce((max, c) => (c.order !== undefined && c.order > max ? c.order : max), -1);
       await setDoc(doc(db, 'categories', id), {
         id,
         label,
         icon,
+        order: maxOrder + 1,
         createdAt: serverTimestamp()
       });
     } catch (error) {
@@ -168,6 +182,20 @@ export default function App() {
     } catch (error) {
       console.error("Delete category failed:", error);
       throw error;
+    }
+  };
+
+  const handleReorderCategories = async (newOrderedCategories: CategoryData[]) => {
+    try {
+      const promises = newOrderedCategories.map((cat, index) => {
+        const catRef = doc(db, 'categories', cat.id);
+        return updateDoc(catRef, {
+          order: index
+        });
+      });
+      await Promise.all(promises);
+    } catch (error) {
+      console.error("Failed to update categories order in Firebase:", error);
     }
   };
 
@@ -504,6 +532,7 @@ export default function App() {
         categories={categories}
         onAddCategory={handleAddCategory}
         onDeleteCategory={handleDeleteCategory}
+        onReorderCategories={handleReorderCategories}
         links={links}
       />
     </div>

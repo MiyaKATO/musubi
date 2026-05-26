@@ -1,4 +1,4 @@
-# Security Specification for DocHub Portal
+# Security Specification for Musubi Portal
 
 ## 1. Data Invariants
 - **Link Integrity**: Every document in the `links` collection must have `title`, `url`, `category`, and `sourceType`.

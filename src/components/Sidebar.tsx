@@ -19,7 +19,7 @@ export default function Sidebar({ activeTab, onTabChange, categories, user, onMa
       <div className="p-6 border-b border-slate-200 bg-white">
         <h1 className="text-xl font-bold text-slate-800 flex items-center gap-2">
           <Icons.Library className="w-6 h-6 text-indigo-600" />
-          DocHub Portal
+          Musubi Portal
         </h1>
         <p className="text-xs text-slate-500 mt-1">資料ポータルサイト</p>
       </div>

@@ -7,6 +7,7 @@ export interface CategoryData {
   label: string;
   icon: string;
   createdAt?: any;
+  order?: number;
 }
 
 export interface DocLink {

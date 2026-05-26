@@ -31,8 +31,8 @@ interface HomeViewProps {
 
 const DEFAULT_CONFIG: PortalConfig = {
   chatworkUrl: 'https://www.chatwork.com',
-  chatworkRoomName: 'DocHub 連絡チャネル',
-  welcomeMessage: 'DocHub Portalへようこそ！散らばっているBoxやGoogleドライブなどの資料リンクをここで一元管理できます。',
+  chatworkRoomName: 'Musubi 連絡チャネル',
+  welcomeMessage: 'Musubi Portalへようこそ！散らばっているBoxやGoogleドライブなどの資料リンクをここで一元管理できます。',
   hpUrl: 'https://yubisui.co.jp',
   hpName: '公式ホームページ',
   chatworkDescription: '連絡・通知・案件の確認に本ポータル推奨のChatworkチャネルをご利用いただけます。',
@@ -42,8 +42,8 @@ const DEFAULT_CONFIG: PortalConfig = {
   announcements: [
     {
       id: 'welcome-ann',
-      title: 'DocHub ポータルがオープンしました',
-      content: '資料を一元管理できるDocHubポータルがリリースされました。左メニューの各カテゴリから、リンク（Box、ドライブ等）を手軽に共有できます。ぜひご活用ください！',
+      title: 'Musubi ポータルがオープンしました',
+      content: '資料を一元管理できるMusubiポータルがリリースされました。左メニューの各カテゴリから、リンク（Box、ドライブ等）を手軽に共有できます。ぜひご活用ください！',
       date: '2026/05/11',
       type: 'success'
     },
@@ -346,7 +346,7 @@ export default function HomeView({ user, onNavigateToCategory, links, categories
         <div className="relative z-10 space-y-4">
           <div className="flex items-center justify-between">
             <span className="px-3 py-1 bg-indigo-500/20 text-indigo-300 rounded-full text-xs font-semibold backdrop-blur-sm border border-indigo-500/10">
-              DocHub Dashboard
+              Musubi Dashboard
             </span>
             {isVerifiedUser && !isEditingPortal && (
               <button 
@@ -380,7 +380,7 @@ export default function HomeView({ user, onNavigateToCategory, links, categories
                       value={editChatworkRoomName}
                       onChange={(e) => setEditChatworkRoomName(e.target.value)}
                       className="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-sm text-slate-100 focus:outline-none focus:border-indigo-500"
-                      placeholder="例: DocHub 連絡チャネル"
+                      placeholder="例: Musubi 連絡チャネル"
                     />
                   </div>
                   <div>
@@ -489,7 +489,7 @@ export default function HomeView({ user, onNavigateToCategory, links, categories
             </div>
           ) : (
             <div className="space-y-4">
-              <h2 className="text-3xl font-extrabold tracking-tight">DocHub Portal</h2>
+              <h2 className="text-3xl font-extrabold tracking-tight">Musubi Portal</h2>
               <p className="text-slate-200 text-base max-w-2xl leading-relaxed whitespace-pre-wrap">
                 {config.welcomeMessage}
               </p>
