@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { doc, onSnapshot, setDoc, updateDoc } from 'firebase/firestore';
 import { db } from '../lib/firebase';
-import { PortalConfig, Announcement, Category, DocLink, CategoryData } from '../types';
+import { PortalConfig, Announcement, Category, DocLink, CategoryData, SOURCE_TYPES } from '../types';
 import * as Icons from 'lucide-react';
 import { 
   MessageSquare, 
@@ -16,7 +16,9 @@ import {
   Info,
   AlertTriangle,
   FileText,
-  Globe
+  Globe,
+  Search,
+  Copy
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { User } from 'firebase/auth';
@@ -84,6 +86,43 @@ export default function HomeView({ user, onNavigateToCategory, links, categories
   const [editAnnType, setEditAnnType] = useState<Announcement['type']>('info');
 
   const [deletingAnnId, setDeletingAnnId] = useState<string | null>(null);
+
+  // Material search states
+  const [searchQuery, setSearchQuery] = useState('');
+  const [copiedLinkId, setCopiedLinkId] = useState<string | null>(null);
+
+  const filteredLinks = React.useMemo(() => {
+    if (!searchQuery.trim()) return [];
+    const query = searchQuery.toLowerCase().trim();
+    return links.filter(link => {
+      const title = (link.title || '').toLowerCase();
+      const desc = (link.description || '').toLowerCase();
+      const url = (link.url || '').toLowerCase();
+      
+      const cat = categories.find(c => c.id === link.category);
+      const catLabel = cat ? cat.label.toLowerCase() : '';
+      
+      const sourceLabel = (SOURCE_TYPES.find(s => s.id === link.sourceType)?.label || link.sourceType).toLowerCase();
+      
+      return (
+        title.includes(query) ||
+        desc.includes(query) ||
+        url.includes(query) ||
+        catLabel.includes(query) ||
+        sourceLabel.includes(query)
+      );
+    });
+  }, [searchQuery, links, categories]);
+
+  const handleCopyLink = (e: React.MouseEvent, id: string, url: string) => {
+    e.preventDefault();
+    e.stopPropagation();
+    navigator.clipboard.writeText(url);
+    setCopiedLinkId(id);
+    setTimeout(() => {
+      setCopiedLinkId(null);
+    }, 2000);
+  };
 
   const isVerifiedUser = user?.emailVerified === true && user?.email?.endsWith('@yubisui.co.jp') === true;
 
@@ -339,26 +378,21 @@ export default function HomeView({ user, onNavigateToCategory, links, categories
   return (
     <div className="max-w-5xl mx-auto space-y-8 animate-fade-in">
       {/* Welcome Section */}
-      <div className="bg-gradient-to-r from-slate-900 via-indigo-950 to-slate-900 rounded-2xl p-8 text-white relative overflow-hidden shadow-lg border border-slate-800">
+      <div className="bg-gradient-to-r from-slate-900 via-indigo-950 to-slate-900 rounded-2xl py-4 px-6 text-white relative overflow-hidden shadow-lg border border-slate-800">
         <div className="absolute top-0 right-0 -mr-16 -mt-16 w-80 h-80 bg-indigo-500/10 rounded-full blur-3xl"></div>
         <div className="absolute bottom-0 left-1/3 -mb-20 w-96 h-96 bg-blue-500/10 rounded-full blur-3xl"></div>
 
-        <div className="relative z-10 space-y-4">
-          <div className="flex items-center justify-between">
-            <span className="px-3 py-1 bg-indigo-500/20 text-indigo-300 rounded-full text-xs font-semibold backdrop-blur-sm border border-indigo-500/10">
-              Musubi Dashboard
-            </span>
-            {isVerifiedUser && !isEditingPortal && (
-              <button 
-                onClick={startEditPortal}
-                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-white/10 hover:bg-white/20 text-white text-xs font-medium transition-all"
-              >
-                <Edit2 className="w-3.5 h-3.5" />
-                ホーム設定を編集
-              </button>
-            )}
-          </div>
+        {isVerifiedUser && !isEditingPortal && (
+          <button 
+            onClick={startEditPortal}
+            className="absolute top-4 right-4 z-20 flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-white/10 hover:bg-white/20 text-white text-xs font-medium transition-all cursor-pointer"
+          >
+            <Edit2 className="w-3.5 h-3.5" />
+            ホーム設定を編集
+          </button>
+        )}
 
+        <div className="relative z-10">
           {isEditingPortal ? (
             <div className="space-y-4 bg-slate-800/80 p-5 rounded-xl border border-slate-700 max-h-[75vh] overflow-y-auto">
               <h3 className="text-sm font-semibold text-slate-300">ウェルカムメッセージの編集</h3>
@@ -488,14 +522,188 @@ export default function HomeView({ user, onNavigateToCategory, links, categories
               </div>
             </div>
           ) : (
-            <div className="space-y-4">
-              <h2 className="text-3xl font-extrabold tracking-tight">Musubi Portal</h2>
-              <p className="text-slate-200 text-base max-w-2xl leading-relaxed whitespace-pre-wrap">
+            <div className="space-y-1">
+              <h2 className="text-xl font-bold tracking-tight">Musubi Portal</h2>
+              <p className="text-slate-200 text-sm max-w-2xl leading-relaxed whitespace-pre-wrap">
                 {config.welcomeMessage}
               </p>
             </div>
           )}
         </div>
+      </div>
+
+      {/* Quick Search Card */}
+      <div className="bg-white border border-slate-200 rounded-2xl p-6 shadow-sm space-y-4">
+        <div className="flex items-center justify-between flex-wrap gap-2">
+          <div className="flex items-center gap-2">
+            <div className="w-8 h-8 bg-indigo-50 rounded-lg flex items-center justify-center text-indigo-600">
+              <Search className="w-4 h-4" />
+            </div>
+            <div>
+              <h3 className="text-base font-bold text-slate-900">全カテゴリー 資料クイック検索</h3>
+              <p className="text-xs text-slate-400 font-medium font-sans">ポータル内の全ての資料を横断的・インクリメンタルに即時検索できます</p>
+            </div>
+          </div>
+          {searchQuery && (
+            <span className="text-xs font-semibold px-2.5 py-1 bg-indigo-50 text-indigo-700 rounded-full border border-indigo-100 animate-fade-in font-mono">
+              検索ヒット: {filteredLinks.length} 件
+            </span>
+          )}
+        </div>
+
+        <div className="relative">
+          <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none">
+            <Search className="h-4 w-4 text-slate-400" />
+          </div>
+          <input
+            type="text"
+            placeholder="資料名、キーワード、カテゴリ、URL、ソース形式（例: Box, Drive, 設計...）で検索"
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            className="block w-full pl-10 pr-10 py-2.5 text-sm bg-slate-50 border border-slate-200 rounded-xl text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 focus:bg-white transition-all font-sans"
+          />
+          {searchQuery && (
+            <button
+              type="button"
+              onClick={() => setSearchQuery('')}
+              className="absolute inset-y-0 right-0 pr-3 flex items-center text-slate-400 hover:text-slate-600 cursor-pointer"
+              title="キーワードをクリア"
+            >
+              <X className="h-4 w-4" />
+            </button>
+          )}
+        </div>
+
+
+        {/* Results with AnimatePresence */}
+        <AnimatePresence>
+          {searchQuery && (
+            <motion.div
+              initial={{ opacity: 0, height: 0 }}
+              animate={{ opacity: 1, height: 'auto' }}
+              exit={{ opacity: 0, height: 0 }}
+              className="mt-4 border-t border-slate-100 pt-4 overflow-hidden"
+            >
+              {filteredLinks.length > 0 ? (
+                <div className="space-y-3 max-h-[480px] overflow-y-auto pr-1">
+                  {filteredLinks.map((link) => {
+                    const cat = categories.find(c => c.id === link.category);
+                    const catLabel = cat ? cat.label : link.category;
+                    const sourceLabel = SOURCE_TYPES.find(s => s.id === link.sourceType)?.label || link.sourceType;
+                    const isCopied = copiedLinkId === link.id;
+
+                    return (
+                      <div
+                        key={link.id}
+                        className="group flex flex-col md:flex-row md:items-center justify-between p-4 bg-slate-50/50 hover:bg-indigo-50/20 border border-slate-150 hover:border-indigo-150 rounded-xl transition-all duration-200 gap-4"
+                      >
+                        <div className="flex-1 min-w-0 space-y-1">
+                          <div className="flex flex-wrap items-center gap-2">
+                            {/* Source Type */}
+                            <span className="px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider bg-slate-200/60 text-slate-600 border border-slate-200">
+                              {sourceLabel}
+                            </span>
+                            
+                            {/* Category Badge - clickable to navigate */}
+                            <button
+                              type="button"
+                              onClick={() => onNavigateToCategory(link.category)}
+                              className="px-2.5 py-0.5 rounded text-[10px] font-bold bg-indigo-50 text-indigo-600 border border-indigo-100 hover:bg-indigo-100 transition-colors cursor-pointer flex items-center gap-1 group-hover:bg-white"
+                              title={`${catLabel} カテゴリーを開く`}
+                            >
+                              <span className="w-1.5 h-1.5 rounded-full bg-indigo-500"></span>
+                              {catLabel}
+                            </button>
+                          </div>
+
+                          <a
+                            href={link.url}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="block"
+                          >
+                            <h4 className="text-sm font-semibold text-slate-900 group-hover:text-indigo-600 transition-colors leading-tight truncate">
+                              {link.title}
+                            </h4>
+                          </a>
+
+                          {link.description && (
+                            <p className="text-xs text-slate-500 line-clamp-2 max-w-3xl leading-relaxed">
+                              {link.description}
+                            </p>
+                          )}
+
+                          <div className="text-[10px] font-mono text-slate-400 truncate max-w-2xl select-all">
+                            {link.url}
+                          </div>
+                        </div>
+
+                        {/* Action Buttons */}
+                        <div className="flex items-center gap-2 self-end md:self-auto flex-shrink-0">
+                          {/* Copy Link */}
+                          <button
+                            type="button"
+                            onClick={(e) => handleCopyLink(e, link.id, link.url)}
+                            className={`flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-semibold cursor-pointer border transition-all ${
+                              isCopied
+                                ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                                : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-50 hover:text-slate-800'
+                            }`}
+                            title="URLをコピー"
+                          >
+                            {isCopied ? (
+                              <>
+                                <Check className="w-3.5 h-3.5 text-emerald-600 font-bold" />
+                                <span className="text-[10px]">コピー済</span>
+                              </>
+                            ) : (
+                              <>
+                                <Copy className="w-3.5 h-3.5 text-slate-400 group-hover:text-slate-600" />
+                                <span className="text-[10px]">コピペ</span>
+                              </>
+                            )}
+                          </button>
+
+                          {/* Inspect Category */}
+                          <button
+                            type="button"
+                            onClick={() => onNavigateToCategory(link.category)}
+                            className="flex items-center gap-1 px-2.5 py-1.5 bg-white text-indigo-600 border border-indigo-100 hover:bg-indigo-50 rounded-lg text-xs font-semibold cursor-pointer transition-all"
+                            title="カテゴリ画面へ移動"
+                          >
+                            <span className="text-[10px]">カテゴリを開く</span>
+                            <ChevronRight className="w-3.5 h-3.5" />
+                          </button>
+
+                          {/* Open link */}
+                          <a
+                            href={link.url}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="flex items-center justify-center p-2 bg-indigo-50 text-indigo-600 hover:bg-indigo-100 rounded-lg border border-indigo-100/40 cursor-pointer transition-all"
+                            title="別タブで開く"
+                          >
+                            <ExternalLink className="w-3.5 h-3.5" />
+                          </a>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              ) : (
+                <div className="flex flex-col items-center justify-center py-10 text-slate-400 gap-2.5 bg-slate-50/50 rounded-xl border border-dashed border-slate-200">
+                  <div className="w-10 h-10 bg-slate-100 rounded-full flex items-center justify-center text-slate-400">
+                    <Search className="w-5 h-5" />
+                  </div>
+                  <div className="text-center font-sans">
+                    <p className="text-sm font-semibold text-slate-700">「{searchQuery}」に一致する資料は見つかりませんでした</p>
+                    <p className="text-xs text-slate-400 mt-1">言葉を変えて検索するか、カテゴリやURLの一部を入力してみてください。</p>
+                  </div>
+                </div>
+              )}
+            </motion.div>
+          )}
+        </AnimatePresence>
       </div>
 
       {/* Grid of Navigation and Action */}
