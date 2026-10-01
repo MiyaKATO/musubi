@@ -20,10 +20,12 @@ interface CategoryManagerDialogProps {
   isOpen: boolean;
   onClose: () => void;
   categories: CategoryData[];
-  onAddCategory: (id: string, label: string, icon: string) => Promise<void>;
+  onAddCategory: (id: string, label: string, icon: string, adminOnly?: boolean) => Promise<void>;
   onDeleteCategory: (id: string) => Promise<void>;
   onReorderCategories: (orderedCategories: CategoryData[]) => Promise<void>;
+  onToggleAdminOnly?: (categoryId: string, adminOnly: boolean) => Promise<void>;
   links: DocLink[];
+  isAdmin: boolean;
 }
 
 export default function CategoryManagerDialog({
@@ -33,11 +35,14 @@ export default function CategoryManagerDialog({
   onAddCategory,
   onDeleteCategory,
   onReorderCategories,
-  links
+  onToggleAdminOnly,
+  links,
+  isAdmin
 }: CategoryManagerDialogProps) {
   const [newId, setNewId] = useState('');
   const [newLabel, setNewLabel] = useState('');
   const [selectedIcon, setSelectedIcon] = useState('Folder');
+  const [newAdminOnly, setNewAdminOnly] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [errorMsg, setErrorMsg] = useState('');
 
@@ -92,10 +97,11 @@ export default function CategoryManagerDialog({
 
     setIsSubmitting(true);
     try {
-      await onAddCategory(trimmedId, trimmedLabel, selectedIcon);
+      await onAddCategory(trimmedId, trimmedLabel, selectedIcon, newAdminOnly);
       setNewId('');
       setNewLabel('');
       setSelectedIcon('Folder');
+      setNewAdminOnly(false);
     } catch (err: any) {
       setErrorMsg('カテゴリーの追加に失敗しました。');
     } finally {
@@ -194,6 +200,29 @@ export default function CategoryManagerDialog({
                 </div>
               </div>
 
+              {/* Admin only option in form */}
+              <div className="p-3 bg-white border border-slate-200 rounded-lg flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <Shield className="w-4 h-4 text-amber-600 flex-shrink-0" />
+                  <div>
+                    <label htmlFor="new-admin-only-cb" className="text-xs font-bold text-slate-800 cursor-pointer block">
+                      管理者のみに制限する
+                    </label>
+                    <p className="text-[10px] text-slate-500">
+                      チェックを入れると管理者設定に登録されたアカウントのみ利用可能になります
+                    </p>
+                  </div>
+                </div>
+                <input
+                  id="new-admin-only-cb"
+                  type="checkbox"
+                  checked={newAdminOnly}
+                  disabled={!isAdmin}
+                  onChange={(e) => setNewAdminOnly(e.target.checked)}
+                  className="w-4 h-4 text-amber-600 rounded border-slate-300 focus:ring-amber-500 cursor-pointer disabled:cursor-not-allowed"
+                />
+              </div>
+
               {errorMsg && (
                 <p className="text-xs text-rose-600 font-medium">{errorMsg}</p>
               )}
@@ -224,17 +253,23 @@ export default function CategoryManagerDialog({
                   const isDeletable = count === 0;
 
                   return (
-                    <div key={cat.id} className="flex items-center justify-between p-4 hover:bg-slate-50/50 transition-colors">
+                    <div key={cat.id} className="flex flex-col sm:flex-row sm:items-center justify-between p-4 gap-3 hover:bg-slate-50/50 transition-colors">
                       <div className="flex items-center gap-3">
-                        <div className="w-9 h-9 bg-slate-100 rounded-lg flex items-center justify-center text-slate-600">
+                        <div className={`w-9 h-9 rounded-lg flex items-center justify-center ${cat.adminOnly ? 'bg-amber-50 text-amber-600' : 'bg-slate-100 text-slate-600'}`}>
                           <CatIcon className="w-4 h-4" />
                         </div>
                         <div>
-                          <div className="flex items-center gap-2">
+                          <div className="flex items-center gap-2 flex-wrap">
                             <span className="text-sm font-bold text-slate-800">{cat.label}</span>
                             <span className="px-1.5 py-0.5 bg-slate-100 text-slate-500 rounded text-[9px] font-mono font-medium">
                               ID: {cat.id}
                             </span>
+                            {cat.adminOnly && (
+                              <span className="px-2 py-0.5 bg-amber-100 text-amber-800 border border-amber-200 rounded-full text-[10px] font-bold flex items-center gap-1">
+                                <Shield className="w-3 h-3 text-amber-600" />
+                                管理者のみ
+                              </span>
+                            )}
                           </div>
                           <p className="text-xs text-slate-400 mt-0.5">
                             紐づく資料数: <span className={count > 0 ? "font-bold text-indigo-600" : "font-medium"}>{count} 件</span>
@@ -242,7 +277,28 @@ export default function CategoryManagerDialog({
                         </div>
                       </div>
 
-                      <div className="flex items-center gap-2">
+                      <div className="flex items-center gap-2 self-end sm:self-center">
+                        {/* 管理者のみチェックボックス */}
+                        <label 
+                          className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border text-xs select-none transition-all ${
+                            cat.adminOnly 
+                              ? 'bg-amber-50 border-amber-300 text-amber-900 font-bold shadow-2xs' 
+                              : 'bg-white border-slate-200 hover:border-slate-300 text-slate-600'
+                          } ${isAdmin ? 'cursor-pointer' : 'cursor-not-allowed opacity-75'}`}
+                          title={isAdmin ? (cat.adminOnly ? '管理者のみに制限中（クリックで解除）' : '全ユーザーが閲覧可能（クリックで管理者のみに設定）') : '管理者のみ設定変更可能です'}
+                        >
+                          <input
+                            type="checkbox"
+                            checked={cat.adminOnly === true}
+                            disabled={!isAdmin}
+                            onChange={(e) => onToggleAdminOnly?.(cat.id, e.target.checked)}
+                            className="w-3.5 h-3.5 text-amber-600 rounded border-slate-300 focus:ring-amber-500 cursor-pointer disabled:cursor-not-allowed"
+                          />
+                          <span className="text-[11px] whitespace-nowrap">
+                            管理者のみ
+                          </span>
+                        </label>
+
                         {/* 順位変更用のボタン */}
                         <div className="flex items-center border border-slate-200 rounded-lg overflow-hidden bg-white shadow-sm">
                           <button

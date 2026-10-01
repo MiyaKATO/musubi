@@ -19,11 +19,10 @@ service cloud.firestore {
       return isSignedIn() && request.auth.uid == uid;
     }
 
-    function isAdmin() {
-      // Bootstrapped admin email check + check for admin collection document
-      return isSignedIn() && (
-        request.auth.token.email == 'kato-miya@yubisui.co.jp' && request.auth.token.email_verified == true
-        // || exists(/databases/$(database)/documents/admins/$(request.auth.uid))
+    function isRegisteredAdmin() {
+      return isEmailVerified() && (
+        request.auth.token.email == 'kato-miya@yubisui.co.jp' ||
+        exists(/databases/$(database)/documents/admins/$(request.auth.token.email))
       );
     }
 
@@ -34,14 +33,34 @@ service cloud.firestore {
     // --- Validation Blueprints ---
     function isValidLink(data) {
       return data.keys().hasAll(['title', 'url', 'category', 'sourceType', 'createdAt', 'updatedAt', 'createdBy'])
-        && data.keys().size() >= 7 && data.keys().size() <= 10
+        && data.keys().size() >= 7 && data.keys().size() <= 11
         && data.title is string && data.title.size() > 0 && data.title.size() <= 200
         && data.url is string && data.url.size() > 0 && data.url.size() <= 1000
         && data.category is string && data.category.size() > 0 && data.category.size() <= 100
         && data.sourceType in ['box', 'drive', 'local', 'other']
         && data.createdBy is string && data.createdBy.size() > 0
         && (!('description' in data) || (data.description is string && data.description.size() <= 1000))
+        && (!('adminOnly' in data) || data.adminOnly is bool)
         && (!('order' in data) || (data.order is number || data.order is float));
+    }
+
+    function isValidCategory(data) {
+      return data.keys().hasAll(['id', 'label', 'icon'])
+        && data.keys().size() >= 3 && data.keys().size() <= 8
+        && data.id is string && data.id.size() > 0 && data.id.size() <= 100
+        && data.label is string && data.label.size() > 0 && data.label.size() <= 100
+        && data.icon is string && data.icon.size() > 0 && data.icon.size() <= 100
+        && (!('adminOnly' in data) || data.adminOnly is bool)
+        && (!('order' in data) || (data.order is number || data.order is float));
+    }
+
+    function isValidAdmin(data) {
+      return data.keys().hasAll(['email'])
+        && data.keys().size() >= 1 && data.keys().size() <= 6
+        && data.email is string && data.email.size() > 0 && data.email.size() <= 128
+        && data.email.matches('.*@yubisui\\.co\\.jp$')
+        && (!('addedBy' in data) || (data.addedBy is string && data.addedBy.size() <= 128))
+        && (!('displayName' in data) || (data.displayName is string && data.displayName.size() <= 128));
     }
 
     // --- Collections ---
@@ -68,7 +87,7 @@ service cloud.firestore {
         && request.resource.data.createdBy == resource.data.createdBy
         && request.resource.data.createdAt == resource.data.createdAt
         && request.resource.data.updatedAt == request.time
-        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['title', 'url', 'description', 'category', 'sourceType', 'updatedAt', 'order']);
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['title', 'url', 'description', 'category', 'sourceType', 'updatedAt', 'order', 'adminOnly']);
 
       allow delete: if isEmailVerified();
     }
@@ -78,10 +97,14 @@ service cloud.firestore {
       allow write: if isEmailVerified();
     }
     
-    // Admin collection (if needed for future scaling)
+    // Admins collection
     match /admins/{adminId} {
       allow read: if isSignedIn();
-      allow write: if false; // Only manageable via console/admin SDK
+      allow create: if isEmailVerified() && isValidId(adminId) && isValidAdmin(request.resource.data) && (
+        isRegisteredAdmin() || 
+        !exists(/databases/$(database)/documents/portal_settings/admin_initialized)
+      );
+      allow update, delete: if isEmailVerified() && isValidId(adminId) && isRegisteredAdmin();
     }
   }
 }

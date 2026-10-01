@@ -29,6 +29,7 @@ interface HomeViewProps {
   links: DocLink[];
   categories: CategoryData[];
   onManageCategories: () => void;
+  isAdmin?: boolean;
 }
 
 const DEFAULT_CONFIG: PortalConfig = {
@@ -59,7 +60,7 @@ const DEFAULT_CONFIG: PortalConfig = {
   ]
 };
 
-export default function HomeView({ user, onNavigateToCategory, links, categories, onManageCategories }: HomeViewProps) {
+export default function HomeView({ user, onNavigateToCategory, links, categories, onManageCategories, isAdmin = false }: HomeViewProps) {
   const [config, setConfig] = useState<PortalConfig>(DEFAULT_CONFIG);
   const [loading, setLoading] = useState(true);
   const [isEditingPortal, setIsEditingPortal] = useState(false);
@@ -95,11 +96,14 @@ export default function HomeView({ user, onNavigateToCategory, links, categories
     if (!searchQuery.trim()) return [];
     const query = searchQuery.toLowerCase().trim();
     return links.filter(link => {
+      const cat = categories.find(c => c.id === link.category);
+      // Non-admins cannot see links from adminOnly categories
+      if (!isAdmin && cat?.adminOnly) return false;
+
       const title = (link.title || '').toLowerCase();
       const desc = (link.description || '').toLowerCase();
       const url = (link.url || '').toLowerCase();
       
-      const cat = categories.find(c => c.id === link.category);
       const catLabel = cat ? cat.label.toLowerCase() : '';
       
       const sourceLabel = (SOURCE_TYPES.find(s => s.id === link.sourceType)?.label || link.sourceType).toLowerCase();
@@ -112,7 +116,7 @@ export default function HomeView({ user, onNavigateToCategory, links, categories
         sourceLabel.includes(query)
       );
     });
-  }, [searchQuery, links, categories]);
+  }, [searchQuery, links, categories, isAdmin]);
 
   const handleCopyLink = (e: React.MouseEvent, id: string, url: string) => {
     e.preventDefault();
@@ -1057,8 +1061,16 @@ export default function HomeView({ user, onNavigateToCategory, links, categories
                     className={`group text-left p-5 bg-white border border-slate-200 rounded-xl transition-all hover:scale-[1.02] shadow-sm hover:shadow-md cursor-pointer flex flex-col justify-between min-h-[12.5rem] h-auto pb-4 ${theme.hoverBorder}`}
                   >
                     <div>
-                      <div className={`w-10 h-10 ${theme.bgLight} rounded-lg flex items-center justify-center mb-3 group-hover:scale-110 transition-all duration-300`}>
-                        <CatIcon className={`w-5 h-5 ${theme.textColor}`} />
+                      <div className="flex items-center justify-between mb-3">
+                        <div className={`w-10 h-10 ${theme.bgLight} rounded-lg flex items-center justify-center group-hover:scale-110 transition-all duration-300`}>
+                          <CatIcon className={`w-5 h-5 ${theme.textColor}`} />
+                        </div>
+                        {cat.adminOnly && (
+                          <span className="px-2 py-0.5 bg-amber-100 text-amber-800 border border-amber-200 rounded-full text-[10px] font-bold flex items-center gap-1 shadow-2xs">
+                            <Icons.Lock className="w-3 h-3 text-amber-600" />
+                            管理者専用
+                          </span>
+                        )}
                       </div>
                       <h4 className="text-base font-bold text-slate-900 group-hover:text-indigo-600 transition-colors">
                         {theme.title}

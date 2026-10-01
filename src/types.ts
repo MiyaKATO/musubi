@@ -1,6 +1,6 @@
 export type Category = string;
 export type SourceType = 'box' | 'drive' | 'local' | 'other';
-export type TabId = 'home' | string;
+export type TabId = 'home' | 'admin-settings' | string;
 
 export interface CategoryData {
   id: string;
@@ -8,6 +8,14 @@ export interface CategoryData {
   icon: string;
   createdAt?: any;
   order?: number;
+  adminOnly?: boolean;
+}
+
+export interface AdminUser {
+  email: string;
+  addedBy?: string;
+  displayName?: string;
+  createdAt?: any;
 }
 
 export interface DocLink {

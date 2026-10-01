@@ -2,13 +2,14 @@ import { useState, useEffect, useMemo } from 'react';
 import { collection, query, onSnapshot, addDoc, updateDoc, deleteDoc, doc, serverTimestamp, setDoc } from 'firebase/firestore';
 import { signInWithPopup, GoogleAuthProvider, onAuthStateChanged, User } from 'firebase/auth';
 import { db, auth, handleFirestoreError, OperationType } from './lib/firebase';
-import { DocLink, Category, CategoryData, CATEGORIES, TabId } from './types';
+import { DocLink, Category, CategoryData, CATEGORIES, TabId, AdminUser } from './types';
 import Sidebar from './components/Sidebar';
 import LinkCard from './components/LinkCard';
 import LinkDialog from './components/LinkDialog';
 import HomeView from './components/HomeView';
 import CategoryManagerDialog from './components/CategoryManagerDialog';
-import { Plus, Search, LogIn, User as UserIcon, LogOut, Loader2, AlertTriangle, Settings } from 'lucide-react';
+import AdminSettingsView from './components/AdminSettingsView';
+import { Plus, Search, LogIn, User as UserIcon, LogOut, Loader2, AlertTriangle, Settings, Shield, ShieldAlert, Lock } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 
 export default function App() {
@@ -24,13 +25,28 @@ export default function App() {
   const [authLoading, setAuthLoading] = useState(true);
   const [authError, setAuthError] = useState<string | null>(null);
 
+  // Admin states
+  const [admins, setAdmins] = useState<AdminUser[]>([]);
+  const [adminsLoading, setAdminsLoading] = useState(true);
+
   // Drag and drop states
   const [isDragging, setIsDragging] = useState(false);
   const [draggedIndex, setDraggedIndex] = useState<number | null>(null);
   const [localLinks, setLocalLinks] = useState<DocLink[]>([]);
 
   const isVerifiedUser = user?.emailVerified === true && user?.email?.endsWith('@yubisui.co.jp') === true;
+
+  // 1st setup check: if 0 admins are registered, any verified user can initialize the 1st admin.
+  // After 1st admin is registered, ONLY registered admins can view/edit admin settings and access adminOnly categories.
+  const isFirstSetup = !adminsLoading && admins.length === 0;
+  const isRegisteredAdmin = admins.some(a => a.email.toLowerCase() === user?.email?.toLowerCase());
+  const isAdmin = isFirstSetup || isRegisteredAdmin || user?.email?.toLowerCase() === 'kato-miya@yubisui.co.jp';
+
   const canReorder = isVerifiedUser && !searchQuery;
+
+  // Current category if not home or admin-settings
+  const currentCategory = categories.find(c => c.id === activeTab);
+  const isCategoryAdminRestricted = currentCategory?.adminOnly === true && !isAdmin;
 
   // Auth Listener
   useEffect(() => {
@@ -157,13 +173,81 @@ export default function App() {
     return () => unsubscribe();
   }, [user, authLoading]);
 
-  const handleAddCategory = async (id: string, label: string, icon: string) => {
+  // Firestore Listener for Admins
+  useEffect(() => {
+    if (authLoading) return;
+
+    if (!user) {
+      setAdmins([]);
+      setAdminsLoading(false);
+      return;
+    }
+
+    setAdminsLoading(true);
+    const q = query(collection(db, 'admins'));
+    const unsubscribe = onSnapshot(q, (snapshot) => {
+      const list = snapshot.docs.map(d => ({
+        ...(d.data() as AdminUser),
+        email: d.id
+      }));
+      setAdmins(list);
+      setAdminsLoading(false);
+    }, (error) => {
+      console.warn("Read admins failed or blocked:", error);
+      setAdminsLoading(false);
+    });
+
+    return () => unsubscribe();
+  }, [user, authLoading]);
+
+  const handleAddAdmin = async (email: string) => {
+    const normalized = email.trim().toLowerCase();
+    try {
+      await setDoc(doc(db, 'admins', normalized), {
+        email: normalized,
+        addedBy: user?.email || 'admin',
+        createdAt: serverTimestamp()
+      });
+      await setDoc(doc(db, 'portal_settings', 'admin_initialized'), {
+        initialized: true,
+        initializedAt: serverTimestamp(),
+        by: user?.email
+      });
+    } catch (error) {
+      handleFirestoreError(error, OperationType.WRITE, `admins/${normalized}`);
+      throw error;
+    }
+  };
+
+  const handleDeleteAdmin = async (email: string) => {
+    const normalized = email.trim().toLowerCase();
+    try {
+      await deleteDoc(doc(db, 'admins', normalized));
+    } catch (error) {
+      handleFirestoreError(error, OperationType.DELETE, `admins/${normalized}`);
+      throw error;
+    }
+  };
+
+  const handleToggleCategoryAdminOnly = async (categoryId: string, adminOnly: boolean) => {
+    try {
+      await updateDoc(doc(db, 'categories', categoryId), {
+        adminOnly
+      });
+    } catch (error) {
+      handleFirestoreError(error, OperationType.UPDATE, `categories/${categoryId}`);
+      throw error;
+    }
+  };
+
+  const handleAddCategory = async (id: string, label: string, icon: string, adminOnly?: boolean) => {
     try {
       const maxOrder = categories.reduce((max, c) => (c.order !== undefined && c.order > max ? c.order : max), -1);
       await setDoc(doc(db, 'categories', id), {
         id,
         label,
         icon,
+        adminOnly: !!adminOnly,
         order: maxOrder + 1,
         createdAt: serverTimestamp()
       });
@@ -200,7 +284,8 @@ export default function App() {
   };
 
   const filteredLinks = useMemo(() => {
-    if (activeTab === 'home') return [];
+    if (activeTab === 'home' || activeTab === 'admin-settings') return [];
+    if (isCategoryAdminRestricted) return [];
     return links
       .filter(link => link.category === activeTab)
       .filter(link => 
@@ -217,7 +302,7 @@ export default function App() {
         const timeB = b.createdAt?.seconds || 0;
         return timeA - timeB;
       });
-  }, [links, activeTab, searchQuery]);
+  }, [links, activeTab, searchQuery, isCategoryAdminRestricted]);
 
   // Synchronize localLinks with filteredLinks when not dragging
   useEffect(() => {
@@ -348,25 +433,39 @@ export default function App() {
         categories={categories}
         user={user}
         onManageCategories={() => setIsCategoryManagerOpen(true)}
+        isAdmin={isAdmin}
+        isFirstSetup={isFirstSetup}
       />
 
       <main className="flex-1 ml-64 p-8">
         <header className="flex items-center justify-between mb-8 pb-4 border-b border-slate-200/60">
           <div>
-            <h2 className="text-2xl font-bold text-slate-900 tracking-tight">
+            <h2 className="text-2xl font-bold text-slate-900 tracking-tight flex items-center gap-2.5">
               {activeTab === 'home' 
                 ? 'ホームダッシュボード' 
-                : `${categories.find(c => c.id === activeTab)?.label || '資料'} 資料`}
+                : activeTab === 'admin-settings'
+                ? '管理者設定'
+                : `${currentCategory?.label || '資料'} 資料`}
+              {activeTab !== 'home' && activeTab !== 'admin-settings' && currentCategory?.adminOnly && (
+                <span className="px-2.5 py-0.5 bg-amber-100 text-amber-800 border border-amber-200 text-xs font-bold rounded-full flex items-center gap-1 shadow-2xs">
+                  <Lock className="w-3 h-3 text-amber-600" />
+                  管理者専用
+                </span>
+              )}
             </h2>
             <p className="text-sm text-slate-500 mt-0.5">
               {activeTab === 'home'
                 ? 'ポータルアナウンス、推奨チャネル、各カテゴリへのクイックアクセス'
+                : activeTab === 'admin-settings'
+                ? 'ポータル管理者の追加・削除、権限管理'
+                : isCategoryAdminRestricted
+                ? 'このカテゴリーは管理者専用です（閲覧制限中）'
                 : `${filteredLinks.length} 個のアイテムが見つかりました`}
             </p>
           </div>
 
           <div className="flex items-center gap-4">
-            {activeTab !== 'home' && (
+            {activeTab !== 'home' && activeTab !== 'admin-settings' && !isCategoryAdminRestricted && (
               <div className="relative">
                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
                 <input
@@ -390,7 +489,7 @@ export default function App() {
                   referrerPolicy="no-referrer" 
                 />
                 <span className="text-xs font-semibold text-slate-700">{user.displayName}</span>
-                <button onClick={handleLogout} className="p-1 text-slate-400 hover:text-slate-600 transition-colors" title="ログアウト">
+                <button onClick={handleLogout} className="p-1 text-slate-400 hover:text-slate-600 transition-colors cursor-pointer" title="ログアウト">
                   <LogOut className="w-4 h-4" />
                 </button>
               </div>
@@ -404,7 +503,7 @@ export default function App() {
               </button>
             )}
 
-            {activeTab !== 'home' && (
+            {activeTab !== 'home' && activeTab !== 'admin-settings' && !isCategoryAdminRestricted && (
               <button
                 onClick={() => {
                   if (!user) {
@@ -414,7 +513,7 @@ export default function App() {
                   setEditingLink(null);
                   setIsDialogOpen(true);
                 }}
-                className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 rounded-lg shadow-sm transition-all"
+                className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 rounded-lg shadow-sm transition-all cursor-pointer"
               >
                 <Plus className="w-4 h-4" />
                 資料を追加
@@ -431,7 +530,7 @@ export default function App() {
             </div>
             <button 
               onClick={() => setAuthError(null)} 
-              className="text-rose-400 hover:text-rose-600 transition-colors text-xs font-semibold px-2 py-1 rounded"
+              className="text-rose-400 hover:text-rose-600 transition-colors text-xs font-semibold px-2 py-1 rounded cursor-pointer"
             >
               閉じる
             </button>
@@ -445,7 +544,38 @@ export default function App() {
             links={links} 
             categories={categories}
             onManageCategories={() => setIsCategoryManagerOpen(true)}
+            isAdmin={isAdmin}
           />
+        ) : activeTab === 'admin-settings' ? (
+          <AdminSettingsView
+            user={user}
+            admins={admins}
+            isAdmin={isAdmin}
+            isFirstSetup={isFirstSetup}
+            categories={categories}
+            onAddAdmin={handleAddAdmin}
+            onDeleteAdmin={handleDeleteAdmin}
+            onToggleCategoryAdminOnly={handleToggleCategoryAdminOnly}
+            onOpenCategoryManager={() => setIsCategoryManagerOpen(true)}
+          />
+        ) : isCategoryAdminRestricted ? (
+          <div className="flex flex-col items-center justify-center py-20 bg-white rounded-2xl border border-amber-200/80 p-8 shadow-sm text-center max-w-xl mx-auto mt-6">
+            <div className="w-16 h-16 bg-amber-50 rounded-full flex items-center justify-center mb-4 text-amber-600">
+              <ShieldAlert className="w-8 h-8" />
+            </div>
+            <h3 className="text-xl font-bold text-slate-900">閲覧権限がありません</h3>
+            <p className="text-sm text-slate-600 mt-2 leading-relaxed">
+              この「{currentCategory?.label}」カテゴリーは管理者専用に設定されています。
+              閲覧および資料の登録・編集を行うには、管理者設定にて管理者として登録されたGoogleアカウントでのログインが必要です。
+            </p>
+            <div className="mt-6 p-4 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-600 w-full text-left space-y-1.5">
+              <div>現在のアカウント: <span className="font-mono text-slate-800 font-semibold">{user?.email || '未ログイン'}</span></div>
+              <div className="text-amber-700 font-medium flex items-center gap-1.5">
+                <Lock className="w-3.5 h-3.5 text-amber-600" />
+                管理者として未登録のため、このカテゴリーの利用は制限されています。
+              </div>
+            </div>
+          </div>
         ) : loading ? (
           <div className="flex flex-col items-center justify-center py-32 text-slate-400 gap-4">
             <Loader2 className="w-10 h-10 animate-spin" />
@@ -507,7 +637,7 @@ export default function App() {
             {!user && (
               <button
                 onClick={handleLogin}
-                className="mt-6 flex items-center gap-2 px-6 py-2 text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 rounded-lg shadow-sm transition-all"
+                className="mt-6 flex items-center gap-2 px-6 py-2 text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 rounded-lg shadow-sm transition-all cursor-pointer"
               >
                 <LogIn className="w-4 h-4" />
                 Googleでログイン
@@ -533,7 +663,9 @@ export default function App() {
         onAddCategory={handleAddCategory}
         onDeleteCategory={handleDeleteCategory}
         onReorderCategories={handleReorderCategories}
+        onToggleAdminOnly={handleToggleCategoryAdminOnly}
         links={links}
+        isAdmin={isAdmin}
       />
     </div>
   );

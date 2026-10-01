@@ -20,7 +20,6 @@
         },
         "category": {
           "type": "string",
-          "enum": ["test", "design", "knowledge"],
           "description": "The category of the document"
         },
         "sourceType": {
@@ -38,15 +37,84 @@
         },
         "createdBy": {
           "type": "string"
+        },
+        "order": {
+          "type": "number",
+          "description": "Display order index"
         }
       },
       "required": ["title", "url", "category", "sourceType"]
+    },
+    "Category": {
+      "title": "Document Category",
+      "description": "Category for organizing document links",
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Unique identifier for the category"
+        },
+        "label": {
+          "type": "string",
+          "description": "Human-readable label for the category"
+        },
+        "icon": {
+          "type": "string",
+          "description": "Icon name from Lucide icon preset"
+        },
+        "order": {
+          "type": "number",
+          "description": "Display order sorting index"
+        },
+        "adminOnly": {
+          "type": "boolean",
+          "description": "Whether this category is restricted to administrators only"
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "required": ["id", "label", "icon"]
+    },
+    "Admin": {
+      "title": "Portal Administrator",
+      "description": "Registered administrator Google email address",
+      "type": "object",
+      "properties": {
+        "email": {
+          "type": "string",
+          "format": "email",
+          "description": "Google login email address of the administrator"
+        },
+        "addedBy": {
+          "type": "string",
+          "description": "Email or UID of who added this admin"
+        },
+        "displayName": {
+          "type": "string",
+          "description": "Optional display name"
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "required": ["email"]
     }
   },
   "firestore": {
     "links/{linkId}": {
       "schema": "Link",
       "description": "A collection of shared document links"
+    },
+    "categories/{categoryId}": {
+      "schema": "Category",
+      "description": "A collection of document categories"
+    },
+    "admins/{adminId}": {
+      "schema": "Admin",
+      "description": "A collection of registered portal administrators"
     }
   }
 }
